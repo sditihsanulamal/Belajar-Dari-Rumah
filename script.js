@@ -8,13 +8,32 @@
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
 const UPLOAD_PRESET   = 'bdr_sdit';
 
-/* ---------- Konfigurasi & Inisialisasi Supabase (Fase 5: BARU) ----------
-   Via UMD/CDN v2, global yang tersedia adalah "window.supabase" dengan
-   method createClient() — bukan "supabaseClient" (itu pola Node/ESM).
-   Key yang dipakai adalah publishable/anon key (aman untuk frontend). */
+/* ---------- Konfigurasi & Inisialisasi Supabase (Fase 5) ----------
+   DIBUNGKUS PROTEKSI: jika CDN gagal termuat (offline/diblokir) atau
+   URL/key tidak valid, APLIKASI TETAP BERJALAN — fitur database hanya
+   menampilkan peringatan ramah alih-alih mematikan seluruh script. */
 const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
 const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+let supabase = null;
+try {
+  if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    console.log('✅ Supabase terhubung.');
+  } else {
+    console.warn('⚠ window.supabase tidak tersedia. Pastikan CDN @supabase/supabase-js@2 termuat.');
+  }
+} catch (err) {
+  console.error('⚠ Gagal menginisialisasi Supabase:', err);
+}
+
+// Cek ketersediaan Supabase sebelum operasi database.
+// denganAlert=false dipakai fungsi render (cukup tampilkan pesan visual di panel).
+function supabaseSiap(denganAlert = true) {
+  if (supabase) return true;
+  if (denganAlert) alert('Fitur database belum aktif. Periksa koneksi internet atau CDN Supabase.');
+  return false;
+}
 
 /* ---------- Helper singkat ---------- */
 const $  = (sel) => document.querySelector(sel);
@@ -257,8 +276,12 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
     }
 
     // ===== B) Simpan metadata tugas ke Supabase (tabel tugas_murid) =====
-    if (status) status.textContent = '⏳ Menyimpan ke database...';
-    try {
+        if (!supabaseSiap()) {
+          if (status) status.textContent = '⚠ Database tidak aktif';
+          return;
+        }
+        if (status) status.textContent = '⏳ Menyimpan ke database...';
+        try {
       const { error: dbError } = await supabase
         .from('tugas_murid')
         .insert({
@@ -330,9 +353,15 @@ async function renderTabelNilai() {
   if (!wrap) return;
 
   // Indikator pemuatan sebelum data dari server tiba
-  wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-spinner fa-spin"></i> Memuat buku nilai...</p>';
+    wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-spinner fa-spin"></i> Memuat buku nilai...</p>';
 
-  // Ambil nilai yang sudah tersimpan (untuk mengisi ulang dropdown/input)
+    // Database tidak tersedia -> tampilkan pesan, jangan lanjut (mati mendadak)
+    if (!supabaseSiap(false)) {
+      wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-triangle-exclamation"></i> Database tidak tersedia.</p>';
+      return;
+    }
+
+    // Ambil nilai yang sudah tersimpan (untuk mengisi ulang dropdown/input)
   let nilaiMap = {};
   try {
     const { data, error } = await supabase.from('nilai_quran').select('*');
@@ -437,11 +466,13 @@ $('#wrap-tabel-nilai').addEventListener('click', async (e) => {
   if (!btn) return;
 
   const nama = btn.dataset.nama;
-  const nilai = ambilNilaiRow(nama);
+    const nilai = ambilNilaiRow(nama);
 
-  // Indikator loading pada tombol
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
+    if (!supabaseSiap()) return;   // jangan disable tombol jika DB tidak aktif
+
+    // Indikator loading pada tombol
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
 
   try {
     const { error } = await supabase.from('nilai_quran').insert({
@@ -465,6 +496,8 @@ $('#wrap-tabel-nilai').addEventListener('click', async (e) => {
 
 // Simpan semua sekaligus -> insert per baris ke nilai_quran
 $('#btn-simpan-semua').addEventListener('click', async () => {
+  if (!supabaseSiap()) return;   // jangan disable tombol jika DB tidak aktif
+
   const btn = $('#btn-simpan-semua');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
@@ -495,6 +528,7 @@ $('#btn-simpan-semua').addEventListener('click', async () => {
 // Reset: hapus semua baris nilai_quran di Supabase
 $('#btn-reset-nilai').addEventListener('click', async () => {
   if (!confirm('Yakin ingin menghapus semua nilai?')) return;
+  if (!supabaseSiap()) return;
 
   try {
     const { error } = await supabase.from('nilai_quran').delete();
@@ -516,13 +550,23 @@ async function renderGaleriTugas() {
   if (!grid) return;
 
   // Indikator pemuatan sebelum data dari server tiba
-  grid.innerHTML = `
-    <div class="empty-state">
-      <i class="fa-solid fa-spinner fa-spin"></i>
-      <p>Memuat galeri tugas...</p>
-    </div>`;
+    grid.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <p>Memuat galeri tugas...</p>
+      </div>`;
 
-  try {
+    // Database tidak tersedia -> tampilkan pesan, jangan teruskan
+    if (!supabaseSiap(false)) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <p>Database tidak tersedia. Galeri belum dapat dimuat.</p>
+        </div>`;
+      return;
+    }
+
+    try {
     // Tarik data galeri langsung dari Supabase (bukan localStorage)
     const { data, error } = await supabase.from('tugas_murid').select('*');
     if (error) throw error;
