@@ -3,10 +3,18 @@
    SPA sederhana (show/hide section) + data dummy
    ============================================================ */
 
-/* ---------- Konfigurasi Cloudinary (Fase 4: BARU) ----------
+/* ---------- Konfigurasi Cloudinary (Fase 4) ----------
    Unsigned Upload: cukup URL upload + preset, tanpa API key di frontend. */
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
 const UPLOAD_PRESET   = 'bdr_sdit';
+
+/* ---------- Konfigurasi & Inisialisasi Supabase (Fase 5: BARU) ----------
+   Via UMD/CDN v2, global yang tersedia adalah "window.supabase" dengan
+   method createClient() — bukan "supabaseClient" (itu pola Node/ESM).
+   Key yang dipakai adalah publishable/anon key (aman untuk frontend). */
+const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
+const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 /* ---------- Helper singkat ---------- */
 const $  = (sel) => document.querySelector(sel);
@@ -33,7 +41,7 @@ const checklistItems = [
     { icon: 'fa-moon',                label: 'Istirahat & tidur yang cukup' },
   ];
 
-// Catatan: galeri foto tugas kini dibaca dari studentTasks (localStorage)
+// Catatan: galeri foto tugas kini dibaca dari tabel "tugas_murid" di Supabase,
 // lihat fungsi renderGaleriTugas() di bagian Wali Kelas.
 
 // Checklist harian versi wali kelas (rekap siswa)
@@ -47,30 +55,11 @@ const checklistWali = [
 // Akun guru demo (validasi hardcode sederhana)
 const AKUN_GURU = { email: 'guru@sekolah.com', password: '123' };
 
-/* ---------- State aplikasi (Fase 3: + localStorage) ---------- */
+/* ---------- State aplikasi ---------- */
 let muridAktif = null;          // nama murid yang sedang login (string)
-let quranGrades = [];           // [{ nama, murajaah, hafalan, wafa }]
-let studentTasks = [];          // [{ nama, kegiatan, fotoUrl, waktu }]
 
-// Kunci penyimpanan di localStorage
-const KUNCI_QURAN = 'quranGrades';
-const KUNCI_TUGAS = 'studentTasks';
-
-/* ---------- Helper baca/tulis localStorage (Fase 3: BARU) ---------- */
-function bacaQuranGrades() {
-  try { quranGrades = JSON.parse(localStorage.getItem(KUNCI_QURAN)) || []; }
-  catch (err) { quranGrades = []; }
-}
-function tulisQuranGrades() {
-  localStorage.setItem(KUNCI_QURAN, JSON.stringify(quranGrades));
-}
-function bacaStudentTasks() {
-  try { studentTasks = JSON.parse(localStorage.getItem(KUNCI_TUGAS)) || []; }
-  catch (err) { studentTasks = []; }
-}
-function tulisStudentTasks() {
-  localStorage.setItem(KUNCI_TUGAS, JSON.stringify(studentTasks));
-}
+// Catatan Fase 5: data tugas & nilai TIDAK lagi disimpan di localStorage.
+// Semua baca/tulis kini lewat Supabase (tabel tugas_murid & nilai_quran).
 
 /* ============================================================
    NAVIGASI SPA (show / hide section)
@@ -85,9 +74,9 @@ function showPage(id) {
   // Header hanya tampil saat sudah "masuk"
   $('#app-header').classList.toggle('hidden', OFFSET_HEADER_PAGES.includes(id));
 
-  // Fase 3: render ulang data saat dashboard tertentu dibuka
-  if (id === 'dashboard-walikelas') renderGaleriTugas();   // baca studentTasks
-  if (id === 'dashboard-quran')     renderTabelNilai();    // baca quranGrades
+  // Fase 5: render ulang data dari Supabase saat dashboard tertentu dibuka
+    if (id === 'dashboard-walikelas') renderGaleriTugas();   // baca tugas_murid
+    if (id === 'dashboard-quran')     renderTabelNilai();    // baca nilai_quran
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -195,8 +184,11 @@ $('#file-tugas').addEventListener('change', (e) => {
 });
 
 /* ============================================================
-   FASE 4 (BARU): UPLOAD BUKTI KEGIATAN KE CLOUDINARY
-   (Sholat Dhuha & Life Skill) -> studentTasks di localStorage
+   FASE 5 (BARU): UPLOAD BUKTI KEGIATAN -> CLOUDINARY + SUPABASE
+   - Cloudinary : menyimpan file gambar & mengembalikan URL
+                  terkompresi (q_auto,f_auto).
+   - Supabase   : menyimpan metadata { nama_murid, jenis_kegiatan,
+                  foto_url } ke tabel "tugas_murid".
    ============================================================ */
 // Label tampilan untuk masing-masing jenis kegiatan
 const LABEL_KEGIATAN = {
@@ -219,7 +211,7 @@ function optimasiCloudinaryUrl(url) {
   return url.replace('/upload/', '/upload/q_auto,f_auto/');
 }
 
-// Delegasi: setelah murid memilih foto -> unggah ke Cloudinary (async/await)
+// Delegasi: setelah murid memilih foto -> unggah ke Cloudinary, lalu simpan ke Supabase
 $('#dashboard-murid').addEventListener('change', async (e) => {
   const input = e.target.closest('.file-foto');
   if (!input) return;
@@ -241,44 +233,56 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
   if (status) status.textContent = '⏳ Mengunggah ke Cloudinary...';
 
   try {
-    // 1) Buat FormData: file gambar + upload_preset
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
+    // ===== A) Upload gambar ke Cloudinary (async) =====
+    let fotoUrlAkhir = '';
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', UPLOAD_PRESET);
 
-    // 2) POST request ke Cloudinary (Unsigned Upload)
-    const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-    if (!res.ok) throw new Error(`Upload gagal (HTTP ${res.status})`);
+      const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Upload gagal (HTTP ${res.status})`);
 
-    const data = await res.json();
-    if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
+      const data = await res.json();
+      if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
 
-    // 3) Optimasi otomatis: kompres foto lewat q_auto,f_auto
-    const fotoUrlAkhir = optimasiCloudinaryUrl(data.secure_url);
+      // Optimasi otomatis: kompres foto lewat q_auto,f_auto
+      fotoUrlAkhir = optimasiCloudinaryUrl(data.secure_url);
+    } catch (err) {
+      // Gagal upload ke Cloudinary (mis. koneksi putus)
+      console.error('Cloudinary upload error:', err);
+      if (status) status.textContent = '⚠ Gagal mengunggah';
+      toast('Gagal mengunggah gambar. Periksa koneksi Anda.', 'fa-triangle-exclamation');
+      return;
+    }
 
-    // 4) Simpan Nama Murid + Jenis Tugas + URL terkompresi ke localStorage
-    studentTasks.push({
-      nama: muridAktif || 'Murid',
-      kegiatan: LABEL_KEGIATAN[key] || key,
-      fotoUrl: fotoUrlAkhir,
-      waktu: new Date().toLocaleString('id-ID'),
-    });
-    tulisStudentTasks();
+    // ===== B) Simpan metadata tugas ke Supabase (tabel tugas_murid) =====
+    if (status) status.textContent = '⏳ Menyimpan ke database...';
+    try {
+      const { error: dbError } = await supabase
+        .from('tugas_murid')
+        .insert({
+          nama_murid: muridAktif || 'Murid',
+          jenis_kegiatan: LABEL_KEGIATAN[key] || key,
+          foto_url: fotoUrlAkhir,
+        });
+      if (dbError) throw dbError;
+    } catch (err) {
+      console.error('Supabase insert error:', err);
+      if (status) status.textContent = '⚠ Gagal menyimpan';
+      alert('Gagal menyimpan tugas ke database. Periksa koneksi Anda.');
+      return;
+    }
 
-    // Tampilkan pratinjau kecil (URL Cloudinary) & status sukses
+    // ===== C) Sukses: tampilkan pratinjau & notifikasi =====
     if (prev) {
       prev.src = fotoUrlAkhir;
       prev.classList.remove('hidden');
     }
     if (status) status.textContent = '✓ Berhasil diserahkan!';
     toast('Tugas Berhasil Terkirim! 📸', 'fa-circle-check');
-  } catch (err) {
-    // 5) Error handling: beri tahu murid & kembalikan tombol seperti semula
-    console.error('Cloudinary upload error:', err);
-    if (status) status.textContent = '⚠ Gagal mengunggah';
-    toast('Gagal mengunggah gambar. Periksa koneksi Anda.', 'fa-triangle-exclamation');
   } finally {
-    // Kembalikan tombol ke kondisi semula (sukses maupun gagal)
+    // Kembalikan tombol & input ke kondisi semula (sukses maupun gagal)
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = teksAsliTombol;
@@ -316,22 +320,37 @@ $('#form-login-guru').addEventListener('submit', (e) => {
   });
 
 /* ============================================================
-   HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN (FASE 3: BARU)
-   Tabel dirender 100% dinamis via innerHTML, tanpa HTML statis.
-   Data disimpan ke array quranGrades di localStorage.
+   HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN (FASE 5: BARU)
+   Tabel dirender dinamis; nilai yang tersimpan ditarik dari
+   tabel "nilai_quran" di Supabase, lalu disimpan kembali
+   lewat insert/delete.
    ============================================================ */
-function renderTabelNilai() {
+async function renderTabelNilai() {
   const wrap = $('#wrap-tabel-nilai');
   if (!wrap) return;
+
+  // Indikator pemuatan sebelum data dari server tiba
+  wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-spinner fa-spin"></i> Memuat buku nilai...</p>';
+
+  // Ambil nilai yang sudah tersimpan (untuk mengisi ulang dropdown/input)
+  let nilaiMap = {};
+  try {
+    const { data, error } = await supabase.from('nilai_quran').select('*');
+    if (error) throw error;
+    (data || []).forEach((r) => { nilaiMap[r.nama_murid] = r; });
+  } catch (err) {
+    console.error('Gagal mengambil nilai:', err);
+    alert('Gagal mengambil data nilai dari server.');
+  }
 
   let rows = '';
   daftarMurid.forEach((m, i) => {
     const inisial = (m.nama[0] || '?').toUpperCase();
-    const nilai = quranGrades.find((g) => g.nama === m.nama) || {};
+    const nilai = nilaiMap[m.nama] || {};
 
     // Opsi dropdown Muraja'ah: bintang 1-5
     const opsiBintang = [1, 2, 3, 4, 5]
-      .map((b) => `<option value="${b}" ${String(nilai.murajaah) === String(b) ? 'selected' : ''}>${'★'.repeat(b)}</option>`)
+      .map((b) => `<option value="${b}" ${String(nilai.nilai_murajaah) === String(b) ? 'selected' : ''}>${'★'.repeat(b)}</option>`)
       .join('');
 
     rows += `
@@ -351,13 +370,13 @@ function renderTabelNilai() {
         <td>
           <select class="form-select select-hafalan" data-nama="${m.nama}" data-kolom="hafalan">
             <option value="">—</option>
-            <option value="Lulus" ${nilai.hafalan === 'Lulus' ? 'selected' : ''}>Lulus</option>
-            <option value="Mengulang" ${nilai.hafalan === 'Mengulang' ? 'selected' : ''}>Mengulang</option>
+            <option value="Lulus" ${nilai.status_hafalan === 'Lulus' ? 'selected' : ''}>Lulus</option>
+            <option value="Mengulang" ${nilai.status_hafalan === 'Mengulang' ? 'selected' : ''}>Mengulang</option>
           </select>
         </td>
         <td>
           <input type="text" class="form-input input-wafa" data-nama="${m.nama}" data-kolom="wafa"
-                 placeholder="Hal. 14" value="${nilai.wafa ?? ''}">
+                 placeholder="Hal. 14" value="${nilai.catatan_wafa ?? ''}">
         </td>
         <td>
           <button class="btn btn-small btn-primary btn-simpan-nilai" data-nama="${m.nama}">
@@ -409,92 +428,143 @@ function tandaiRowTersimpan(nama) {
   }, 1600);
 }
 
-// FASE 3 (BARU): simpan nilai per murid -> array quranGrades -> localStorage
+// FASE 5 (BARU): simpan nilai per murid -> insert ke tabel nilai_quran.
 // (delegasi lewat #wrap-tabel-nilai karena tbody dirender dinamis)
-$('#wrap-tabel-nilai').addEventListener('click', (e) => {
+// Catatan: jika kolom nama_murid di tabel ber-constraint UNIQUE, ganti
+// .insert() dengan .upsert(..., { onConflict: 'nama_murid' }) agar tidak dobel.
+$('#wrap-tabel-nilai').addEventListener('click', async (e) => {
   const btn = e.target.closest('.btn-simpan-nilai');
   if (!btn) return;
 
   const nama = btn.dataset.nama;
-  let rec = quranGrades.find((g) => g.nama === nama);
-  if (!rec) { rec = { nama }; quranGrades.push(rec); }
-  Object.assign(rec, ambilNilaiRow(nama));
+  const nilai = ambilNilaiRow(nama);
 
-  tulisQuranGrades();          // tulis ulang ke localStorage
-  tandaiRowTersimpan(nama);
-  toast(`Nilai ${nama} berhasil disimpan! ✅`);
-});
+  // Indikator loading pada tombol
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
 
-// Simpan semua sekaligus
-$('#btn-simpan-semua').addEventListener('click', () => {
-  let kosong = 0;
+  try {
+    const { error } = await supabase.from('nilai_quran').insert({
+      nama_murid: nama,
+      nilai_murajaah: nilai.murajaah || null,
+      status_hafalan: nilai.hafalan || '',
+      catatan_wafa: nilai.wafa,
+    });
+    if (error) throw error;
 
-  daftarMurid.forEach((m) => {
-    const n = ambilNilaiRow(m.nama);
-    if (!n.murajaah && !n.hafalan && !n.wafa) { kosong++; return; }
-
-    let rec = quranGrades.find((g) => g.nama === m.nama);
-    if (!rec) { rec = { nama: m.nama }; quranGrades.push(rec); }
-    Object.assign(rec, n);
-  });
-
-  tulisQuranGrades();
-  renderTabelNilai();
-
-  if (kosong === daftarMurid.length) {
-    toast('Belum ada nilai yang diisi.', 'fa-triangle-exclamation');
-  } else {
-    toast('Semua nilai berhasil disimpan! 💾');
+    tandaiRowTersimpan(nama);
+    toast(`Nilai ${nama} berhasil disimpan! ✅`);
+  } catch (err) {
+    console.error('Gagal simpan nilai:', err);
+    alert('Gagal menyimpan nilai. Periksa koneksi Anda.');
+    // Kembalikan tombol seperti semula (tandaiRowTersimpan tidak sempat jalan)
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Nilai';
   }
 });
 
-// Reset semua nilai
-$('#btn-reset-nilai').addEventListener('click', () => {
+// Simpan semua sekaligus -> insert per baris ke nilai_quran
+$('#btn-simpan-semua').addEventListener('click', async () => {
+  const btn = $('#btn-simpan-semua');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
+
+  try {
+    for (const m of daftarMurid) {
+      const n = ambilNilaiRow(m.nama);
+      if (!n.murajaah && !n.hafalan && !n.wafa) continue;
+
+      const { error } = await supabase.from('nilai_quran').insert({
+        nama_murid: m.nama,
+        nilai_murajaah: n.murajaah || null,
+        status_hafalan: n.hafalan || '',
+        catatan_wafa: n.wafa,
+      });
+      if (error) throw error;
+    }
+    toast('Semua nilai berhasil disimpan! 💾');
+  } catch (err) {
+    console.error('Gagal simpan semua nilai:', err);
+    alert('Gagal menyimpan nilai. Periksa koneksi Anda.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Semua';
+  }
+});
+
+// Reset: hapus semua baris nilai_quran di Supabase
+$('#btn-reset-nilai').addEventListener('click', async () => {
   if (!confirm('Yakin ingin menghapus semua nilai?')) return;
-  quranGrades = [];
-  tulisQuranGrades();
-  renderTabelNilai();
-  toast('Nilai di-reset ke awal.', 'fa-rotate-left');
+
+  try {
+    const { error } = await supabase.from('nilai_quran').delete();
+    if (error) throw error;
+    renderTabelNilai();
+    toast('Nilai di-reset ke awal.', 'fa-rotate-left');
+  } catch (err) {
+    console.error('Gagal reset nilai:', err);
+    alert('Gagal menghapus nilai. Periksa koneksi Anda.');
+  }
 });
 
 /* ============================================================
-   HALAMAN 6 -> WALI KELAS (Galeri Tugas dari studentTasks)
+   HALAMAN 6 -> WALI KELAS (Galeri Tugas dari Supabase)
    ============================================================ */
-// FASE 4 (BARU): galeri membaca array studentTasks dari localStorage.
-// fotoUrl kini URL Cloudinary permanen (https), jadi tampil juga setelah refresh.
-function renderGaleriTugas() {
+// FASE 5 (BARU): galeri menarik data dari tabel "tugas_murid" di Supabase.
+async function renderGaleriTugas() {
   const grid = $('#gallery-grid');
   if (!grid) return;
-  grid.innerHTML = '';
 
-  // Belum ada kiriman -> tampilkan pesan kosong
-  if (!studentTasks.length) {
+  // Indikator pemuatan sebelum data dari server tiba
+  grid.innerHTML = `
+    <div class="empty-state">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Memuat galeri tugas...</p>
+    </div>`;
+
+  try {
+    // Tarik data galeri langsung dari Supabase (bukan localStorage)
+    const { data, error } = await supabase.from('tugas_murid').select('*');
+    if (error) throw error;
+
+    grid.innerHTML = '';
+
+    // Tidak ada data -> pesan kosong
+    if (!data || data.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-regular fa-folder-open"></i>
+          <p>Belum ada bukti kegiatan yang diserahkan murid.</p>
+          <span class="muted">Coba login sebagai murid lalu upload foto.</span>
+        </div>`;
+      return;
+    }
+
+    data.forEach((t) => {
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+      card.innerHTML = `
+        <div class="photo">
+          <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
+          <img src="${t.foto_url}" alt="Bukti foto ${t.nama_murid}" loading="lazy" onerror="this.remove()">
+          <span class="status-pill">Diserahkan</span>
+        </div>
+        <div class="gallery-body">
+          <div class="g-name">${t.nama_murid || 'Murid'}</div>
+          <div class="g-title"><i class="fa-solid fa-tag"></i> ${t.jenis_kegiatan || 'Kegiatan'}</div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Gagal mengambil data galeri:', err);
+    alert('Gagal mengambil data galeri dari server.');
     grid.innerHTML = `
       <div class="empty-state">
-        <i class="fa-regular fa-folder-open"></i>
-        <p>Belum ada bukti kegiatan yang diserahkan murid.</p>
-        <span class="muted">Coba login sebagai murid lalu upload foto.</span>
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <p>Gagal memuat galeri. Periksa koneksi Anda.</p>
       </div>`;
-    return;
   }
-
-  studentTasks.forEach((t) => {
-    const card = document.createElement('div');
-    card.className = 'gallery-card';
-    card.innerHTML = `
-      <div class="photo">
-        <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
-        <img src="${t.fotoUrl}" alt="Bukti foto ${t.nama}" loading="lazy" onerror="this.remove()">
-        <span class="status-pill">Diserahkan</span>
-      </div>
-      <div class="gallery-body">
-        <div class="g-name">${t.nama || 'Murid'}</div>
-        <div class="g-title"><i class="fa-solid fa-tag"></i> ${t.kegiatan || 'Kegiatan'}</div>
-        <div class="g-meta"><i class="fa-regular fa-clock"></i> ${t.waktu || ''}</div>
-      </div>
-    `;
-    grid.appendChild(card);
-  });
 }
 
 // Tab: Galeri <-> Checklist
@@ -592,15 +662,11 @@ function cekSession() {
    INISIALISASI
    ============================================================ */
 function init() {
-  // Fase 3: muat data persisten dari localStorage terlebih dahulu
-  bacaQuranGrades();
-  bacaStudentTasks();
-
   isiDropdownMurid();
-  renderTabelNilai();
-  renderGaleriTugas();
+  renderTabelNilai();     // ambil nilai_quran dari Supabase
+  renderGaleriTugas();    // ambil tugas_murid dari Supabase
   renderChecklistWali();
-  cekSession();   // periksa localStorage saat halaman dimuat
+  cekSession();           // periksa sesi login di localStorage
 }
 
 document.addEventListener('DOMContentLoaded', init);
