@@ -182,18 +182,61 @@
       <!-- Checklist Daily Tracker -->
       <div class="card">
         <div class="card-title">
-          <h3><i class="fa-solid fa-list-check"></i> Checklist Harian</h3>
-          <span class="badge" id="check-progress-text">0/7</span>
-        </div>
+                  <h3><i class="fa-solid fa-list-check"></i> Checklist Harian</h3>
+                  <span class="badge" id="check-progress-text">0/9</span>
+                </div>
 
-        <div class="progress">
-          <div class="progress-bar" id="check-progress-bar" style="width: 0%"></div>
-        </div>
+                <div class="progress">
+                  <div class="progress-bar" id="check-progress-bar" style="width: 0%"></div>
+                </div>
 
-        <ul class="checklist" id="checklist-murid">
-          <!-- diisi otomatis oleh script.js -->
-        </ul>
-      </div>
+                <ul class="checklist" id="checklist-murid">
+                  <!-- diisi otomatis oleh script.js -->
+                </ul>
+              </div>
+
+              <!-- FASE 3 (BARU): Upload Bukti Kegiatan Berfoto -->
+              <div class="card">
+                <div class="card-title">
+                  <h3><i class="fa-solid fa-camera"></i> Upload Bukti Kegiatan</h3>
+                </div>
+
+                <div class="activity-row">
+                  <div class="activity-info">
+                    <span class="activity-icon"><i class="fa-solid fa-sun"></i></span>
+                    <div>
+                      <b>Sholat Dhuha</b>
+                      <p class="muted" id="status-sholat-dhuha">Belum diserahkan</p>
+                    </div>
+                  </div>
+                  <div class="activity-side">
+                    <img id="preview-sholat-dhuha" class="photo-preview hidden" alt="Pratinjau Sholat Dhuha">
+                    <button class="btn btn-small btn-outline btn-upload-foto" data-kegiatan="sholat-dhuha">
+                      <i class="fa-solid fa-camera"></i> Upload Foto
+                    </button>
+                    <input type="file" id="file-sholat-dhuha" class="file-foto hidden-file"
+                           data-kegiatan="sholat-dhuha" accept="image/*">
+                  </div>
+                </div>
+
+                <div class="activity-row">
+                  <div class="activity-info">
+                    <span class="activity-icon"><i class="fa-solid fa-hand-sparkles"></i></span>
+                    <div>
+                      <b>Life Skill</b>
+                      <p class="muted" id="status-life-skill">Belum diserahkan</p>
+                    </div>
+                  </div>
+                  <div class="activity-side">
+                    <img id="preview-life-skill" class="photo-preview hidden" alt="Pratinjau Life Skill">
+                    <button class="btn btn-small btn-outline btn-upload-foto" data-kegiatan="life-skill">
+                      <i class="fa-solid fa-camera"></i> Upload Foto
+                    </button>
+                    <input type="file" id="file-life-skill" class="file-foto hidden-file"
+                           data-kegiatan="life-skill" accept="image/*">
+                  </div>
+                </div>
+              </div>
 
       <!-- Mini info tugas (dummy) -->
       <div class="card task-info">
@@ -221,24 +264,10 @@
       </div>
 
       <div class="card table-card">
-        <div class="table-scroll">
-          <table id="tabel-nilai">
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Nama Murid</th>
-                <th>Kelancaran</th>
-                <th>Hafalan</th>
-                <th>Wafa</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-nilai">
-              <!-- diisi otomatis oleh script.js -->
-            </tbody>
-          </table>
-        </div>
-      </div>
+              <div class="table-scroll" id="wrap-tabel-nilai">
+                <!-- FASE 3 (BARU): tabel dirender dinamis oleh script.js (renderTabelNilai) -->
+              </div>
+            </div>
 
       <div class="flex-btns">
         <button class="btn btn-outline" id="btn-reset-nilai">

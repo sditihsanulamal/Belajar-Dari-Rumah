@@ -572,6 +572,56 @@ main {
 .upload-btn { margin-top: 1.1rem; font-size: 1rem; padding: .95rem; }
 .hidden-file { display: none; }
 
+/* ===== FASE 3 (BARU): baris upload bukti kegiatan murid ===== */
+.activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: .9rem .1rem;
+  border-bottom: 1px dashed var(--garis);
+}
+.activity-row:last-child { border-bottom: none; }
+
+.activity-info {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-width: 180px;
+}
+.activity-info b { color: var(--biru-gelap); }
+
+.activity-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  font-size: 1.15rem;
+  color: var(--biru-7);
+  background: linear-gradient(140deg, var(--biru-2), var(--biru-4));
+}
+
+.activity-side {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Pratinjau kecil foto bukti kegiatan */
+.photo-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--sukses);
+  box-shadow: var(--shadow-sm);
+}
+
 /* ============================================================
    HALAMAN 5 : BUKU NILAI AL-QUR'AN
    ============================================================ */
@@ -642,6 +692,32 @@ tbody td {
 
 tr.saved-row td { background: var(--sukses-muda); }
 
+/* ===== FASE 3 (BARU): kontrol form buku nilai Al-Qur'an ===== */
+.form-select,
+.form-input {
+  width: 100%;
+  min-width: 100px;
+  padding: .5rem .6rem;
+  border: 2px solid var(--biru-2);
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--biru-gelap);
+  background: var(--biru-1);
+  outline: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+.form-select:focus,
+.form-input:focus {
+  border-color: var(--biru-5);
+  background: #fff;
+}
+.form-select { cursor: pointer; }
+.form-select option { color: var(--teks); background: #fff; }
+.input-wafa { min-width: 92px; }
+#tabel-nilai { min-width: 640px; }
+
 .flex-btns {
   display: flex;
   gap: .8rem;
@@ -691,6 +767,19 @@ tr.saved-row td { background: var(--sukses-muda); }
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 1rem;
 }
+
+/* FASE 3 (BARU): pesan saat galeri masih kosong */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--teks-muted);
+  border: 2px dashed var(--biru-2);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .6);
+}
+.empty-state i { font-size: 2.2rem; color: var(--biru-3); display: block; margin-bottom: .6rem; }
+.empty-state p { font-weight: 600; color: var(--teks); }
 
 .gallery-card {
   background: var(--putih);

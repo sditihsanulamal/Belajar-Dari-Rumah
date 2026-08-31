@@ -22,17 +22,14 @@ const checklistItems = [
   { icon: 'fa-book-open',           label: 'Membaca buku/materi 20 menit' },
   { icon: 'fa-pen',                 label: 'Mengerjakan tugas dari guru' },
   { icon: 'fa-hand-holding-heart',  label: 'Membantu pekerjaan rumah' },
-  { icon: 'fa-dumbbell',            label: 'Olahraga / menggerakkan badan' },
-  { icon: 'fa-moon',                label: 'Istirahat & tidur yang cukup' },
-];
+    { icon: 'fa-dumbbell',            label: 'Olahraga / menggerakkan badan' },
+    { icon: 'fa-sun',                 label: 'Sholat Dhuha berjamaah' },
+    { icon: 'fa-hand-sparkles',       label: 'Life Skill: keterampilan harian' },
+    { icon: 'fa-moon',                label: 'Istirahat & tidur yang cukup' },
+  ];
 
-// Galeri foto tugas (kurikulum wali kelas)
-const tugasSiswa = [
-  { nama: 'Ahmad', judul: 'Gambar Pemandangan Alam',   mapel: 'SBdP',       tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 12, komentar: 3 },
-  { nama: 'Budi',  judul: 'Membuat Jam Dinding',       mapel: 'Matematika', tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 5,  komentar: 1 },
-  { nama: 'Siti',  judul: 'Bangun Datar dari Karton',  mapel: 'Matematika', tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 8,  komentar: 5 },
-  { nama: 'Zahra', judul: 'Kolase Daun Kering',        mapel: 'SBdP',       tgl: 'Selasa, 21 Mei', status: 'Mendekati',    likes: 15, komentar: 4 },
-];
+// Catatan: galeri foto tugas kini dibaca dari studentTasks (localStorage)
+// lihat fungsi renderGaleriTugas() di bagian Wali Kelas.
 
 // Checklist harian versi wali kelas (rekap siswa)
 const checklistWali = [
@@ -45,9 +42,30 @@ const checklistWali = [
 // Akun guru demo (validasi hardcode sederhana)
 const AKUN_GURU = { email: 'guru@sekolah.com', password: '123' };
 
-/* ---------- State aplikasi ---------- */
-let muridAktif = null;          // murid yang sedang login
-let daftarNilai = {};           // { nama: { kelancaran, hafalan, wafa } }
+/* ---------- State aplikasi (Fase 3: + localStorage) ---------- */
+let muridAktif = null;          // nama murid yang sedang login (string)
+let quranGrades = [];           // [{ nama, murajaah, hafalan, wafa }]
+let studentTasks = [];          // [{ nama, kegiatan, fotoUrl, waktu }]
+
+// Kunci penyimpanan di localStorage
+const KUNCI_QURAN = 'quranGrades';
+const KUNCI_TUGAS = 'studentTasks';
+
+/* ---------- Helper baca/tulis localStorage (Fase 3: BARU) ---------- */
+function bacaQuranGrades() {
+  try { quranGrades = JSON.parse(localStorage.getItem(KUNCI_QURAN)) || []; }
+  catch (err) { quranGrades = []; }
+}
+function tulisQuranGrades() {
+  localStorage.setItem(KUNCI_QURAN, JSON.stringify(quranGrades));
+}
+function bacaStudentTasks() {
+  try { studentTasks = JSON.parse(localStorage.getItem(KUNCI_TUGAS)) || []; }
+  catch (err) { studentTasks = []; }
+}
+function tulisStudentTasks() {
+  localStorage.setItem(KUNCI_TUGAS, JSON.stringify(studentTasks));
+}
 
 /* ============================================================
    NAVIGASI SPA (show / hide section)
@@ -61,6 +79,10 @@ function showPage(id) {
 
   // Header hanya tampil saat sudah "masuk"
   $('#app-header').classList.toggle('hidden', OFFSET_HEADER_PAGES.includes(id));
+
+  // Fase 3: render ulang data saat dashboard tertentu dibuka
+  if (id === 'dashboard-walikelas') renderGaleriTugas();   // baca studentTasks
+  if (id === 'dashboard-quran')     renderTabelNilai();    // baca quranGrades
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -168,6 +190,58 @@ $('#file-tugas').addEventListener('change', (e) => {
 });
 
 /* ============================================================
+   FASE 3 (BARU): UPLOAD BUKTI KEGIATAN BERFOTO
+   (Sholat Dhuha & Life Skill) -> studentTasks di localStorage
+   ============================================================ */
+// Label tampilan untuk masing-masing jenis kegiatan
+const LABEL_KEGIATAN = {
+  'sholat-dhuha': 'Sholat Dhuha',
+  'life-skill':   'Life Skill',
+};
+
+// Delegasi: tombol "Upload Foto" -> memicu input file tersembunyi
+$('#dashboard-murid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-upload-foto');
+  if (!btn) return;
+  const key = btn.dataset.kegiatan;
+  const input = document.querySelector(`.file-foto[data-kegiatan="${CSS.escape(key)}"]`);
+  if (input) input.click();
+});
+
+// Delegasi: setelah murid memilih foto, tampilkan preview & simpan log
+$('#dashboard-murid').addEventListener('change', (e) => {
+  const input = e.target.closest('.file-foto');
+  if (!input) return;
+
+  const file = input.files[0];
+  if (!file) return;
+
+  const key = input.dataset.kegiatan;
+  const previewUrl = URL.createObjectURL(file);   // URL pratinjau lokal (session)
+
+  // Simpan log tugas (Nama Murid, Jenis Kegiatan, URL Pratinjau) ke localStorage
+  studentTasks.push({
+    nama: muridAktif || 'Murid',
+    kegiatan: LABEL_KEGIATAN[key] || key,
+    fotoUrl: previewUrl,
+    waktu: new Date().toLocaleString('id-ID'),
+  });
+  tulisStudentTasks();
+
+  // Tampilkan pratinjau kecil di layar murid
+  const prev = $(`#preview-${key}`);
+  if (prev) {
+    prev.src = previewUrl;
+    prev.classList.remove('hidden');
+  }
+  const status = $(`#status-${key}`);
+  if (status) status.textContent = '✓ Berhasil diserahkan!';
+
+  toast('Berhasil diserahkan! 📸', 'fa-circle-check');
+  input.value = '';
+});
+
+/* ============================================================
    HALAMAN 2 -> LOGIN GURU (password)
    ============================================================ */
 $('#toggle-pass').addEventListener('click', () => {
@@ -196,62 +270,83 @@ $('#form-login-guru').addEventListener('submit', (e) => {
   });
 
 /* ============================================================
-   HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN
+   HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN (FASE 3: BARU)
+   Tabel dirender 100% dinamis via innerHTML, tanpa HTML statis.
+   Data disimpan ke array quranGrades di localStorage.
    ============================================================ */
 function renderTabelNilai() {
-  const tbody = $('#tbody-nilai');
-  tbody.innerHTML = '';
+  const wrap = $('#wrap-tabel-nilai');
+  if (!wrap) return;
 
+  let rows = '';
   daftarMurid.forEach((m, i) => {
-    const inisial = m.nama.split(' ').map(w => w[0]).join('').toUpperCase();
-    const nilai = daftarNilai[m.nama] || {};
+    const inisial = (m.nama[0] || '?').toUpperCase();
+    const nilai = quranGrades.find((g) => g.nama === m.nama) || {};
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${i + 1}</td>
-      <td>
-        <div class="cell-nama">
-          <span class="mini-avatar">${inisial}</span>${m.nama}
-        </div>
-      </td>
-      <td><input type="number" class="nilai-input" min="0" max="100"
-                 placeholder="-" data-nama="${m.nama}" data-kolom="kelancaran"
-                 value="${nilai.kelancaran ?? ''}"></td>
-      <td><input type="number" class="nilai-input" min="0" max="100"
-                 placeholder="-" data-nama="${m.nama}" data-kolom="hafalan"
-                 value="${nilai.hafalan ?? ''}"></td>
-      <td><input type="number" class="nilai-input" min="0" max="100"
-                 placeholder="-" data-nama="${m.nama}" data-kolom="wafa"
-                 value="${nilai.wafa ?? ''}"></td>
-      <td>
-        <button class="btn btn-small btn-primary btn-simpan-nilai" data-nama="${m.nama}">
-          <i class="fa-solid fa-floppy-disk"></i> Simpan
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-      });
+    // Opsi dropdown Muraja'ah: bintang 1-5
+    const opsiBintang = [1, 2, 3, 4, 5]
+      .map((b) => `<option value="${b}" ${String(nilai.murajaah) === String(b) ? 'selected' : ''}>${'★'.repeat(b)}</option>`)
+      .join('');
 
-      // Batasi angka input 0–100 supaya nilai tetap valid
-      $$('#tbody-nilai .nilai-input').forEach((inp) => {
-        inp.addEventListener('input', () => batasiNilai(inp));
-      });
-    }
+    rows += `
+      <tr>
+        <td>${i + 1}</td>
+        <td>
+          <div class="cell-nama">
+            <span class="mini-avatar">${inisial}</span>${m.nama}
+          </div>
+        </td>
+        <td>
+          <select class="form-select select-murajaah" data-nama="${m.nama}" data-kolom="murajaah">
+            <option value="">—</option>
+            ${opsiBintang}
+          </select>
+        </td>
+        <td>
+          <select class="form-select select-hafalan" data-nama="${m.nama}" data-kolom="hafalan">
+            <option value="">—</option>
+            <option value="Lulus" ${nilai.hafalan === 'Lulus' ? 'selected' : ''}>Lulus</option>
+            <option value="Mengulang" ${nilai.hafalan === 'Mengulang' ? 'selected' : ''}>Mengulang</option>
+          </select>
+        </td>
+        <td>
+          <input type="text" class="form-input input-wafa" data-nama="${m.nama}" data-kolom="wafa"
+                 placeholder="Hal. 14" value="${nilai.wafa ?? ''}">
+        </td>
+        <td>
+          <button class="btn btn-small btn-primary btn-simpan-nilai" data-nama="${m.nama}">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan Nilai
+          </button>
+        </td>
+      </tr>`;
+  });
 
-function batasiNilai(inp) {
-  const v = parseInt(inp.value, 10);
-  if (v < 0) inp.value = 0;
-  if (v > 100) inp.value = 100;
+  wrap.innerHTML = `
+    <table id="tabel-nilai">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Nama Murid</th>
+          <th>Muraja'ah</th>
+          <th>Hafalan</th>
+          <th>Wafa</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
+// Baca nilai satu baris dari input yang sedang tampil di layar
 function ambilNilaiRow(nama) {
   return {
-    kelancaran: parseInt($(`input[data-nama="${CSS.escape(nama)}"][data-kolom="kelancaran"]`)?.value || 0, 10),
-    hafalan:    parseInt($(`input[data-nama="${CSS.escape(nama)}"][data-kolom="hafalan"]`)?.value || 0, 10),
-    wafa:       parseInt($(`input[data-nama="${CSS.escape(nama)}"][data-kolom="wafa"]`)?.value || 0, 10),
+    murajaah: Number($(`.select-murajaah[data-nama="${CSS.escape(nama)}"]`)?.value || 0),
+    hafalan:  $(`.select-hafalan[data-nama="${CSS.escape(nama)}"]`)?.value || '',
+    wafa:     $(`.input-wafa[data-nama="${CSS.escape(nama)}"]`)?.value.trim() || '',
   };
 }
 
+// Efek visual: baris & tombol berubah hijau sesaat setelah tersimpan
 function tandaiRowTersimpan(nama) {
   const btn = $(`.btn-simpan-nilai[data-nama="${CSS.escape(nama)}"]`);
   const tr  = btn?.closest('tr');
@@ -262,20 +357,26 @@ function tandaiRowTersimpan(nama) {
   btn.classList.remove('btn-primary');
   setTimeout(() => {
     tr.classList.remove('saved-row');
-    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan';
+    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Nilai';
     btn.classList.remove('btn-success');
     btn.classList.add('btn-primary');
-  }, 1800);
+  }, 1600);
 }
 
-// Simpan per baris
-$('#tbody-nilai').addEventListener('click', (e) => {
+// FASE 3 (BARU): simpan nilai per murid -> array quranGrades -> localStorage
+// (delegasi lewat #wrap-tabel-nilai karena tbody dirender dinamis)
+$('#wrap-tabel-nilai').addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-simpan-nilai');
   if (!btn) return;
+
   const nama = btn.dataset.nama;
-  daftarNilai[nama] = ambilNilaiRow(nama);
+  let rec = quranGrades.find((g) => g.nama === nama);
+  if (!rec) { rec = { nama }; quranGrades.push(rec); }
+  Object.assign(rec, ambilNilaiRow(nama));
+
+  tulisQuranGrades();          // tulis ulang ke localStorage
   tandaiRowTersimpan(nama);
-  toast(`Nilai ${nama} disimpan ✅`);
+  toast(`Nilai ${nama} berhasil disimpan! ✅`);
 });
 
 // Simpan semua sekaligus
@@ -283,11 +384,16 @@ $('#btn-simpan-semua').addEventListener('click', () => {
   let kosong = 0;
 
   daftarMurid.forEach((m) => {
-    const nilai = ambilNilaiRow(m.nama);
-    if (!nilai.kelancaran && !nilai.hafalan && !nilai.wafa) kosong++;
-    daftarNilai[m.nama] = nilai;
-    tandaiRowTersimpan(m.nama);
+    const n = ambilNilaiRow(m.nama);
+    if (!n.murajaah && !n.hafalan && !n.wafa) { kosong++; return; }
+
+    let rec = quranGrades.find((g) => g.nama === m.nama);
+    if (!rec) { rec = { nama: m.nama }; quranGrades.push(rec); }
+    Object.assign(rec, n);
   });
+
+  tulisQuranGrades();
+  renderTabelNilai();
 
   if (kosong === daftarMurid.length) {
     toast('Belum ada nilai yang diisi.', 'fa-triangle-exclamation');
@@ -296,64 +402,53 @@ $('#btn-simpan-semua').addEventListener('click', () => {
   }
 });
 
-// Reset nilai
+// Reset semua nilai
 $('#btn-reset-nilai').addEventListener('click', () => {
   if (!confirm('Yakin ingin menghapus semua nilai?')) return;
-  daftarNilai = {};
+  quranGrades = [];
+  tulisQuranGrades();
   renderTabelNilai();
   toast('Nilai di-reset ke awal.', 'fa-rotate-left');
 });
 
 /* ============================================================
-   HALAMAN 6 -> WALI KELAS (tab galeri & checklist)
+   HALAMAN 6 -> WALI KELAS (Galeri Tugas dari studentTasks)
    ============================================================ */
+// FASE 3 (BARU): galeri membaca array studentTasks dari localStorage
 function renderGaleriTugas() {
   const grid = $('#gallery-grid');
+  if (!grid) return;
   grid.innerHTML = '';
 
-  tugasSiswa.forEach((t, i) => {
+  // Belum ada kiriman -> tampilkan pesan kosong
+  if (!studentTasks.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-regular fa-folder-open"></i>
+        <p>Belum ada bukti kegiatan yang diserahkan murid.</p>
+        <span class="muted">Coba login sebagai murid lalu upload foto.</span>
+      </div>`;
+    return;
+  }
+
+  studentTasks.forEach((t) => {
     const card = document.createElement('div');
     card.className = 'gallery-card';
     card.innerHTML = `
       <div class="photo">
-        <span class="photo-icon"><i class="fa-solid fa-image"></i></span>
-        <img src="https://picsum.photos/seed/tugas${i + 1}/400/300" alt="Foto tugas ${t.nama}" loading="lazy">
-        <span class="status-pill ${t.status === 'Mendekati' ? 'mendekati' : ''}">${t.status}</span>
+        <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
+        <img src="${t.fotoUrl}" alt="Bukti foto ${t.nama}" loading="lazy" onerror="this.remove()">
+        <span class="status-pill">Diserahkan</span>
       </div>
       <div class="gallery-body">
-        <div class="g-name">${t.nama}</div>
-        <div class="g-title">${t.judul}</div>
-        <div class="g-meta"><i class="fa-solid fa-book-bookmark"></i> ${t.mapel} &nbsp;•&nbsp; ${t.tgl}</div>
-        <div class="gallery-actions">
-          <button class="act btn-like" data-idx="${i}">
-            <i class="fa-regular fa-thumbs-up"></i> <span>${t.likes}</span>
-          </button>
-          <button class="act">
-            <i class="fa-regular fa-comment"></i> <span>${t.komentar}</span>
-          </button>
-        </div>
+        <div class="g-name">${t.nama || 'Murid'}</div>
+        <div class="g-title"><i class="fa-solid fa-tag"></i> ${t.kegiatan || 'Kegiatan'}</div>
+        <div class="g-meta"><i class="fa-regular fa-clock"></i> ${t.waktu || ''}</div>
       </div>
     `;
     grid.appendChild(card);
   });
 }
-
-// Suka / like (dummy)
-$('#gallery-grid').addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-like');
-  if (!btn) return;
-  const idx = btn.dataset.idx;
-  btn.classList.toggle('liked');
-  const icon = btn.querySelector('i');
-  const span = btn.querySelector('span');
-  icon.className = btn.classList.contains('liked')
-    ? 'fa-solid fa-thumbs-up'
-    : 'fa-regular fa-thumbs-up';
-  let n = parseInt(tugasSiswa[idx].likes, 10);
-  n += btn.classList.contains('liked') ? 1 : -1;
-  tugasSiswa[idx].likes = n;
-  span.textContent = n;
-});
 
 // Tab: Galeri <-> Checklist
 $$('.tab').forEach((tab) => {
@@ -450,6 +545,10 @@ function cekSession() {
    INISIALISASI
    ============================================================ */
 function init() {
+  // Fase 3: muat data persisten dari localStorage terlebih dahulu
+  bacaQuranGrades();
+  bacaStudentTasks();
+
   isiDropdownMurid();
   renderTabelNilai();
   renderGaleriTugas();
