@@ -3,6 +3,11 @@
    SPA sederhana (show/hide section) + data dummy
    ============================================================ */
 
+/* ---------- Konfigurasi Cloudinary (Fase 4: BARU) ----------
+   Unsigned Upload: cukup URL upload + preset, tanpa API key di frontend. */
+const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
+const UPLOAD_PRESET   = 'bdr_sdit';
+
 /* ---------- Helper singkat ---------- */
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -190,7 +195,7 @@ $('#file-tugas').addEventListener('change', (e) => {
 });
 
 /* ============================================================
-   FASE 3 (BARU): UPLOAD BUKTI KEGIATAN BERFOTO
+   FASE 4 (BARU): UPLOAD BUKTI KEGIATAN KE CLOUDINARY
    (Sholat Dhuha & Life Skill) -> studentTasks di localStorage
    ============================================================ */
 // Label tampilan untuk masing-masing jenis kegiatan
@@ -208,8 +213,14 @@ $('#dashboard-murid').addEventListener('click', (e) => {
   if (input) input.click();
 });
 
-// Delegasi: setelah murid memilih foto, tampilkan preview & simpan log
-$('#dashboard-murid').addEventListener('change', (e) => {
+// Sisipkan /upload/q_auto,f_auto/ agar Cloudinary mengompres foto otomatis.
+// Contoh: .../upload/v1234/foto.jpg -> .../upload/q_auto,f_auto/v1234/foto.jpg
+function optimasiCloudinaryUrl(url) {
+  return url.replace('/upload/', '/upload/q_auto,f_auto/');
+}
+
+// Delegasi: setelah murid memilih foto -> unggah ke Cloudinary (async/await)
+$('#dashboard-murid').addEventListener('change', async (e) => {
   const input = e.target.closest('.file-foto');
   if (!input) return;
 
@@ -217,28 +228,63 @@ $('#dashboard-murid').addEventListener('change', (e) => {
   if (!file) return;
 
   const key = input.dataset.kegiatan;
-  const previewUrl = URL.createObjectURL(file);   // URL pratinjau lokal (session)
-
-  // Simpan log tugas (Nama Murid, Jenis Kegiatan, URL Pratinjau) ke localStorage
-  studentTasks.push({
-    nama: muridAktif || 'Murid',
-    kegiatan: LABEL_KEGIATAN[key] || key,
-    fotoUrl: previewUrl,
-    waktu: new Date().toLocaleString('id-ID'),
-  });
-  tulisStudentTasks();
-
-  // Tampilkan pratinjau kecil di layar murid
-  const prev = $(`#preview-${key}`);
-  if (prev) {
-    prev.src = previewUrl;
-    prev.classList.remove('hidden');
-  }
+  const btn    = $(`.btn-upload-foto[data-kegiatan="${CSS.escape(key)}"]`);
+  const prev   = $(`#preview-${key}`);
   const status = $(`#status-${key}`);
-  if (status) status.textContent = '✓ Berhasil diserahkan!';
+  const teksAsliTombol = btn?.innerHTML || '';
 
-  toast('Berhasil diserahkan! 📸', 'fa-circle-check');
-  input.value = '';
+  // --- Indikator loading: ubah teks tombol & nonaktifkan (cegah klik 2x) ---
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sedang Mengunggah...';
+  }
+  if (status) status.textContent = '⏳ Mengunggah ke Cloudinary...';
+
+  try {
+    // 1) Buat FormData: file gambar + upload_preset
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+
+    // 2) POST request ke Cloudinary (Unsigned Upload)
+    const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(`Upload gagal (HTTP ${res.status})`);
+
+    const data = await res.json();
+    if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
+
+    // 3) Optimasi otomatis: kompres foto lewat q_auto,f_auto
+    const fotoUrlAkhir = optimasiCloudinaryUrl(data.secure_url);
+
+    // 4) Simpan Nama Murid + Jenis Tugas + URL terkompresi ke localStorage
+    studentTasks.push({
+      nama: muridAktif || 'Murid',
+      kegiatan: LABEL_KEGIATAN[key] || key,
+      fotoUrl: fotoUrlAkhir,
+      waktu: new Date().toLocaleString('id-ID'),
+    });
+    tulisStudentTasks();
+
+    // Tampilkan pratinjau kecil (URL Cloudinary) & status sukses
+    if (prev) {
+      prev.src = fotoUrlAkhir;
+      prev.classList.remove('hidden');
+    }
+    if (status) status.textContent = '✓ Berhasil diserahkan!';
+    toast('Tugas Berhasil Terkirim! 📸', 'fa-circle-check');
+  } catch (err) {
+    // 5) Error handling: beri tahu murid & kembalikan tombol seperti semula
+    console.error('Cloudinary upload error:', err);
+    if (status) status.textContent = '⚠ Gagal mengunggah';
+    toast('Gagal mengunggah gambar. Periksa koneksi Anda.', 'fa-triangle-exclamation');
+  } finally {
+    // Kembalikan tombol ke kondisi semula (sukses maupun gagal)
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = teksAsliTombol;
+    }
+    input.value = '';   // reset agar file yang sama bisa dipilih lagi
+  }
 });
 
 /* ============================================================
@@ -414,7 +460,8 @@ $('#btn-reset-nilai').addEventListener('click', () => {
 /* ============================================================
    HALAMAN 6 -> WALI KELAS (Galeri Tugas dari studentTasks)
    ============================================================ */
-// FASE 3 (BARU): galeri membaca array studentTasks dari localStorage
+// FASE 4 (BARU): galeri membaca array studentTasks dari localStorage.
+// fotoUrl kini URL Cloudinary permanen (https), jadi tampil juga setelah refresh.
 function renderGaleriTugas() {
   const grid = $('#gallery-grid');
   if (!grid) return;
