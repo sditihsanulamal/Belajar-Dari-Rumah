@@ -127,6 +127,10 @@ function masukSebagaiMurid(m) {
 }
 
 $('#btn-role-murid').addEventListener('click', openModalMurid);
+
+// Masuk sebagai Guru -> menuju form login (email + password)
+$('#btn-role-guru').addEventListener('click', () => showPage('login-guru'));
+
 $('#btn-batal-murid').addEventListener('click', closeModalMurid);
 $('#modal-pilih-murid').addEventListener('click', (e) => {
   if (e.target === $('#modal-pilih-murid')) closeModalMurid();

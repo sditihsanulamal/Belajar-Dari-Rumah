@@ -262,6 +262,21 @@ main {
 .role-card.alt p { color: rgba(255, 255, 255, .82); }
 .role-card.alt .go { color: rgba(255, 255, 255, .9); }
 
+.role-card .login-tag {
+  position: absolute;
+  bottom: 1.4rem;
+  right: 1.4rem;
+  font-size: .7rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, .9);
+  background: rgba(255, 255, 255, .18);
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+}
+
 .footer-note {
   font-size: .8rem;
   color: var(--teks-muted);
