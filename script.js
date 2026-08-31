@@ -9,15 +9,11 @@ const $$ = (sel) => document.querySelectorAll(sel);
 
 /* ---------- DATA DUMMY (tanpa database asli) ---------- */
 
-// Daftar nama murid (dipakai di banyak tempat)
-const daftarMurid = [
-  { nama: 'Ahmad Fauzi',       kelas: 'Kelas 4A' },
-  { nama: 'Siti Nurhaliza',    kelas: 'Kelas 4A' },
-  { nama: 'Budi Santoso',      kelas: 'Kelas 4A' },
-  { nama: 'Aisyah Putri',      kelas: 'Kelas 4A' },
-  { nama: 'Rizky Ramadhan',    kelas: 'Kelas 4A' },
-  { nama: 'Dewi Lestari',      kelas: 'Kelas 4A' },
-];
+// Daftar nama murid (digunakan untuk dropdown login murid)
+const daftarNamaMurid = ['Ahmad', 'Budi', 'Siti', 'Zahra'];
+
+// Data murid lengkap (dipakai tabel nilai, galeri, checklist, dll.)
+const daftarMurid = daftarNamaMurid.map((nama) => ({ nama, kelas: 'Kelas 4A' }));
 
 // Checklist harian murid
 const checklistItems = [
@@ -32,26 +28,22 @@ const checklistItems = [
 
 // Galeri foto tugas (kurikulum wali kelas)
 const tugasSiswa = [
-  { nama: 'Ahmad Fauzi',    judul: 'Gambar Pemandangan Alam',   mapel: 'SBdP',         tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 12, komentar: 3 },
-  { nama: 'Siti Nurhaliza', judul: 'Bangun Datar dari Karton',  mapel: 'Matematika',   tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 8,  komentar: 5 },
-  { nama: 'Budi Santoso',   judul: 'Membuat Jam Dinding',       mapel: 'Matematika',   tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 5,  komentar: 1 },
-  { nama: 'Aisyah Putri',   judul: 'Kolase Daun Kering',        mapel: 'SBdP',         tgl: 'Selasa, 21 Mei', status: 'Mendekati',    likes: 15, komentar: 4 },
-  { nama: 'Rizky Ramadhan', judul: 'Membuat Poster Hemat Air',  mapel: 'PPKn',         tgl: 'Selasa, 21 Mei', status: 'Dikumpulkan', likes: 6,  komentar: 2 },
-  { nama: 'Dewi Lestari',   judul: 'Kerajinan dari Plastisin',  mapel: 'SBdP',         tgl: 'Rabu, 22 Mei',   status: 'Dikumpulkan', likes: 10, komentar: 6 },
+  { nama: 'Ahmad', judul: 'Gambar Pemandangan Alam',   mapel: 'SBdP',       tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 12, komentar: 3 },
+  { nama: 'Budi',  judul: 'Membuat Jam Dinding',       mapel: 'Matematika', tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 5,  komentar: 1 },
+  { nama: 'Siti',  judul: 'Bangun Datar dari Karton',  mapel: 'Matematika', tgl: 'Senin, 20 Mei', status: 'Dikumpulkan', likes: 8,  komentar: 5 },
+  { nama: 'Zahra', judul: 'Kolase Daun Kering',        mapel: 'SBdP',       tgl: 'Selasa, 21 Mei', status: 'Mendekati',    likes: 15, komentar: 4 },
 ];
 
 // Checklist harian versi wali kelas (rekap siswa)
 const checklistWali = [
-  { nama: 'Ahmad Fauzi',    shalat: true,  murojaah: true,  tugas: true },
-  { nama: 'Siti Nurhaliza', shalat: true,  murojaah: true,  tugas: true },
-  { nama: 'Budi Santoso',   shalat: false, murojaah: true,  tugas: true },
-  { nama: 'Aisyah Putri',   shalat: true,  murojaah: false, tugas: false },
-  { nama: 'Rizky Ramadhan', shalat: true,  murojaah: true,  tugas: true },
-  { nama: 'Dewi Lestari',   shalat: false, murojaah: false, tugas: true },
+  { nama: 'Ahmad', shalat: true,  murojaah: true,  tugas: true },
+  { nama: 'Budi',  shalat: false, murojaah: true,  tugas: true },
+  { nama: 'Siti',  shalat: true,  murojaah: true,  tugas: true },
+  { nama: 'Zahra', shalat: true,  murojaah: false, tugas: false },
 ];
 
-// Akun guru demo
-const AKUN_GURU = { email: 'guru@sd.sch.id', password: '1234' };
+// Akun guru demo (validasi hardcode sederhana)
+const AKUN_GURU = { email: 'guru@sekolah.com', password: '123' };
 
 /* ---------- State aplikasi ---------- */
 let muridAktif = null;          // murid yang sedang login
@@ -60,7 +52,7 @@ let daftarNilai = {};           // { nama: { kelancaran, hafalan, wafa } }
 /* ============================================================
    NAVIGASI SPA (show / hide section)
    ============================================================ */
-const OFFSET_HEADER_PAGES = ['landing-page', 'login-guru'];
+const OFFSET_HEADER_PAGES = ['landing-page', 'login-murid', 'login-guru'];
 
 function showPage(id) {
   $$('.page').forEach((page) => {
@@ -80,61 +72,53 @@ document.addEventListener('click', (e) => {
 });
 
 /* ============================================================
-   HALAMAN 1 -> MASUK MURID (pilih nama, tanpa password)
+   HALAMAN 2A -> LOGIN MURID (dropdown nama, tanpa password)
    ============================================================ */
-function openModalMurid() {
-  renderListMurid();
-  $('#modal-pilih-murid').classList.remove('hidden');
-}
-
-function closeModalMurid() {
-  $('#modal-pilih-murid').classList.add('hidden');
-}
-
-function renderListMurid() {
-  const list = $('#list-murid');
-  list.innerHTML = '';
-  daftarMurid.forEach((m) => {
-    const li = document.createElement('li');
-    const inisial = m.nama.split(' ').map(w => w[0]).join('').toUpperCase();
-    li.innerHTML = `
-      <span class="mini-avatar">${inisial}</span>
-      <span class="kelas-badge">${m.kelas}</span>
-      <span style="flex:1">${m.nama}</span>
-      <i class="fa-solid fa-chevron-right" style="color:var(--biru-4);font-size:.8rem"></i>
-    `;
-    li.addEventListener('click', () => masukSebagaiMurid(m));
-    list.appendChild(li);
+function isiDropdownMurid() {
+  const select = $('#select-murid');
+  select.innerHTML = '<option value="">— Pilih nama kamu —</option>';
+  daftarNamaMurid.forEach((nama) => {
+    const opt = document.createElement('option');
+    opt.value = nama;
+    opt.textContent = nama;
+    select.appendChild(opt);
   });
 }
 
-function masukSebagaiMurid(m) {
-  muridAktif = m;
-  closeModalMurid();
-  showPage('dashboard-murid');
+function masukSebagaiMurid(nama) {
+  // Simpan sesi ke localStorage (contoh: { role: 'student', name: 'Budi' })
+  localStorage.setItem('session', JSON.stringify({ role: 'student', name: nama }));
+  muridAktif = nama;
 
-  // Isi profil
-  $('#murid-nama').textContent = m.nama;
-  $('#murid-kelas').textContent = `Kelas ${m.kelas.split(' ')[1]} — SDN Harapan 01`;
+  // Sapaan di dashboard murid
+  $('#sapaan-murid').textContent = `Selamat datang, ${nama}! 👋`;
+  $('#murid-nama').textContent = nama;
+  $('#murid-kelas').textContent = 'Kelas 4A — SDN Harapan 01';
   const avatar = $('#murid-avatar');
-  avatar.innerHTML = `<span style="font-size:.95rem;font-weight:800">${m.nama.split(' ').map(w => w[0]).join('').toUpperCase()}</span>`;
+  avatar.innerHTML = `<span style="font-size:.95rem;font-weight:800">${nama[0].toUpperCase()}</span>`;
   $('#tanggal-today').textContent = '📅 ' + new Date().toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 
   renderChecklistMurid();
-  toast(`Halo, ${m.nama}! Selamat belajar 🌟`);
+  showPage('dashboard-murid');
+  toast(`Halo, ${nama}! Selamat belajar 🌟`);
 }
 
-$('#btn-role-murid').addEventListener('click', openModalMurid);
-
-// Masuk sebagai Guru -> menuju form login (email + password)
-$('#btn-role-guru').addEventListener('click', () => showPage('login-guru'));
-
-$('#btn-batal-murid').addEventListener('click', closeModalMurid);
-$('#modal-pilih-murid').addEventListener('click', (e) => {
-  if (e.target === $('#modal-pilih-murid')) closeModalMurid();
+// Submit form login murid
+$('#form-login-murid').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const nama = $('#select-murid').value;
+  if (!nama) {
+    toast('Pilih nama kamu dulu ya!', 'fa-triangle-exclamation');
+    return;
+  }
+  masukSebagaiMurid(nama);
 });
+
+// Landing: tombol pilih peran
+$('#btn-role-murid').addEventListener('click', () => showPage('login-murid'));
+$('#btn-role-guru').addEventListener('click', () => showPage('login-guru'));
 
 /* ============================================================
    DASHBOARD MURID — CHECKLIST HARIAN
@@ -199,15 +183,17 @@ $('#form-login-guru').addEventListener('submit', (e) => {
   const password = $('#password').value;
 
   if (email === AKUN_GURU.email && password === AKUN_GURU.password) {
-    $('#login-error').classList.add('hidden');
-    $('#email').value = '';
-    $('#password').value = '';
-    showPage('dashboard-guru');
-    toast('Selamat datang, Ustadz Adam! 👋');
-  } else {
-    $('#login-error').classList.remove('hidden');
-  }
-});
+      // Simpan sesi guru ke localStorage (contoh: { role: 'teacher' })
+      localStorage.setItem('session', JSON.stringify({ role: 'teacher' }));
+      $('#login-error').classList.add('hidden');
+      $('#email').value = '';
+      $('#password').value = '';
+      showPage('dashboard-guru');
+      toast('Selamat datang, Guru! 👋');
+    } else {
+      $('#login-error').classList.remove('hidden');
+    }
+  });
 
 /* ============================================================
    HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN
@@ -244,13 +230,13 @@ function renderTabelNilai() {
       </td>
     `;
     tbody.appendChild(tr);
-  });
+      });
 
-    // Batasi angka input 0–100 supaya nilai tetap valid
-  $$('#tbody-nilai .nilai-input').forEach((inp) => {
-    inp.addEventListener('input', () => batasiNilai(inp));
-  });
-}
+      // Batasi angka input 0–100 supaya nilai tetap valid
+      $$('#tbody-nilai .nilai-input').forEach((inp) => {
+        inp.addEventListener('input', () => batasiNilai(inp));
+      });
+    }
 
 function batasiNilai(inp) {
   const v = parseInt(inp.value, 10);
@@ -404,6 +390,7 @@ function renderChecklistWali() {
    ============================================================ */
 $('#btn-logout').addEventListener('click', () => {
   if (!confirm('Yakin ingin keluar?')) return;
+  localStorage.clear();          // hapus sesi dari localStorage
   muridAktif = null;
   showPage('landing-page');
   toast('Kamu sudah keluar. Sampai jumpa! 👋', 'fa-right-from-bracket');
@@ -426,14 +413,48 @@ function toast(msg, icon = 'fa-circle-check') {
 }
 
 /* ============================================================
+   PENGECEKAN SESI (localStorage) SAAT HALAMAN DIMUAT
+   ============================================================ */
+function cekSession() {
+  const raw = localStorage.getItem('session');
+
+  // Tidak ada sesi -> kembali ke landing page
+  if (!raw) {
+    showPage('landing-page');
+    return;
+  }
+
+  try {
+    const sesi = JSON.parse(raw);
+
+    // Role student -> langsung tampilkan dashboard murid
+    if (sesi.role === 'student' && sesi.name) {
+      masukSebagaiMurid(sesi.name);
+      return;
+    }
+
+    // Role teacher -> langsung tampilkan dashboard guru (pilih modul)
+    if (sesi.role === 'teacher') {
+      showPage('dashboard-guru');
+      return;
+    }
+  } catch (err) {
+    // Data di localStorage rusak -> bersihkan dan kembali ke landing
+  }
+
+  localStorage.clear();
+  showPage('landing-page');
+}
+
+/* ============================================================
    INISIALISASI
    ============================================================ */
 function init() {
-  renderListMurid();
+  isiDropdownMurid();
   renderTabelNilai();
   renderGaleriTugas();
   renderChecklistWali();
-  showPage('landing-page');
+  cekSession();   // periksa localStorage saat halaman dimuat
 }
 
 document.addEventListener('DOMContentLoaded', init);

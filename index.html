@@ -77,7 +77,7 @@
             <label for="email">Email</label>
             <div class="input-wrap">
               <i class="fa-solid fa-envelope"></i>
-              <input type="email" id="email" placeholder="guru@sd.sch.id" autocomplete="off">
+              <input type="email" id="email" placeholder="guru@sekolah.com" autocomplete="off">
             </div>
           </div>
 
@@ -94,7 +94,7 @@
 
           <div class="login-hint">
             <i class="fa-solid fa-circle-info"></i>
-            Demo: email <b>guru@sd.sch.id</b> &amp; password <b>1234</b>
+            Demo: email <b>guru@sekolah.com</b> &amp; password <b>123</b>
           </div>
 
           <p class="login-error hidden" id="login-error">
@@ -102,13 +102,43 @@
           </p>
 
           <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">
-            Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i>
-          </button>
-        </form>
-      </div>
-    </section>
+                      Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    </button>
+                  </form>
+                </div>
+              </section>
 
-    <!-- ============ HALAMAN 3 : DASHBOARD GURU (PILIH MODUL) ============ -->
+              <!-- ============ HALAMAN 2B : LOGIN MURID (dropdown) ============ -->
+              <section id="login-murid" class="page hidden">
+                <button class="back-btn" data-go="landing-page">
+                  <i class="fa-solid fa-arrow-left"></i> Kembali
+                </button>
+
+                <div class="card login-card">
+                  <div class="login-icon"><i class="fa-solid fa-user-graduate"></i></div>
+                  <h2>Masuk Murid</h2>
+                  <p class="muted">Pilih namamu dari daftar, tanpa password 😊</p>
+
+                  <form id="form-login-murid" novalidate>
+                    <div class="field">
+                      <label for="select-murid">Nama Kamu</label>
+                      <div class="input-wrap">
+                        <i class="fa-solid fa-user"></i>
+                        <select id="select-murid" aria-label="Pilih nama murid">
+                          <option value="">— Pilih nama kamu —</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down"></i>
+                      </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">
+                      Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    </button>
+                  </form>
+                </div>
+              </section>
+
+              <!-- ============ HALAMAN 3 : DASHBOARD GURU (PILIH MODUL) ============ -->
     <section id="dashboard-guru" class="page hidden">
       <div class="page-head">
         <h2>Selamat Datang, Ustadz Adam <span class="wave">👋</span></h2>
@@ -134,8 +164,13 @@
 
     <!-- ============ HALAMAN 4 : DASHBOARD MURID ============ -->
     <section id="dashboard-murid" class="page hidden">
-      <!-- Profil singkat -->
-      <div class="profile-card card">
+          <div class="page-head">
+            <h2 id="sapaan-murid">Selamat datang! 👋</h2>
+            <p class="muted">Semangat belajar dari rumah hari ini!</p>
+          </div>
+
+          <!-- Profil singkat -->
+          <div class="profile-card card">
         <div class="avatar" id="murid-avatar"><i class="fa-solid fa-user-graduate"></i></div>
         <div class="profile-info">
           <h2 id="murid-nama">Murid</h2>
@@ -269,24 +304,8 @@
 
   </main>
 
-  <!-- ================= MODAL: PILIH NAMA MURID ================= -->
-  <div id="modal-pilih-murid" class="modal-overlay hidden">
-    <div class="modal card">
-      <div class="modal-head">
-        <h3><i class="fa-solid fa-users"></i> Halo! Pilih Nama Kamu</h3>
-        <p class="muted">Murid cukup memilih namanya, tanpa password 😊</p>
-      </div>
-      <ul class="student-list" id="list-murid">
-        <!-- diisi otomatis oleh script.js -->
-      </ul>
-      <button class="btn btn-ghost btn-block" id="btn-batal-murid">
-        <i class="fa-solid fa-xmark"></i> Batal
-      </button>
-    </div>
-  </div>
-
   <!-- Tempat notifikasi kecil (toast) -->
-  <div id="toast-area"></div>
+    <div id="toast-area"></div>
 
   <script src="script.js"></script>
 </body>

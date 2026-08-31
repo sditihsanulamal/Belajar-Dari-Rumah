@@ -366,6 +366,22 @@ main {
 }
 .input-wrap input::placeholder { color: #9dbcd9; }
 
+/* Dropdown (select) login murid agar serasi dengan input */
+.input-wrap select {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: .95rem;
+  padding: .6rem 0;
+  color: var(--teks);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.input-wrap select option { color: var(--teks); background: #fff; }
+
 .toggle-pass {
   border: none;
   background: transparent;
@@ -777,61 +793,6 @@ tr.saved-row td { background: var(--sukses-muda); }
 }
 .status-chip.lengkap { background: var(--sukses-muda); color: var(--sukses); }
 .status-chip.kurang { background: #fff7e6; color: #b97d14; }
-
-/* ============================================================
-   MODAL PILIH NAMA MURID
-   ============================================================ */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(13, 60, 105, .45);
-  backdrop-filter: blur(4px);
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-.modal {
-  width: min(400px, 100%);
-  max-height: 82vh;
-  overflow-y: auto;
-  text-align: center;
-}
-.modal-head { margin-bottom: 1rem; }
-.modal-head h3 { color: var(--biru-gelap); font-size: 1.1rem; }
-
-.student-list { list-style: none; margin-bottom: 1rem; }
-.student-list li {
-  display: flex;
-  align-items: center;
-  gap: .7rem;
-  padding: .75rem .9rem;
-  border: 2px solid var(--biru-2);
-  border-radius: 12px;
-  margin-bottom: .55rem;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: .93rem;
-  color: var(--teks);
-  text-align: left;
-  transition: all .15s ease;
-}
-.student-list li:hover {
-  border-color: var(--biru-5);
-  background: var(--biru-1);
-  transform: translateX(4px);
-}
-.student-list li .mini-avatar { background: var(--biru-1); }
-
-.kelas-badge {
-  font-size: .72rem;
-  font-weight: 600;
-  color: var(--biru-7);
-  background: var(--biru-1);
-  border-radius: 999px;
-  padding: .2rem .55rem;
-  white-space: nowrap;
-}
 
 /* ============================================================
    TOAST (notifikasi kecil)
