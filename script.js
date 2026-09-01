@@ -416,10 +416,12 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
     /* ============================================================
        FASE 6 (BARU): SETORAN HAFALAN MANDIRI (PERekAM SUARA)
        - Alur: getUserMedia -> MediaRecorder -> Blob -> File (.webm/.mp4)
-               -> Cloudinary (auto/upload) -> Supabase (tugas_murid),
+               -> Cloudinary (video/upload) -> Supabase (tugas_murid),
          dengan jenis_kegiatan "Setoran Hafalan".
        ============================================================ */
-    const CLOUDINARY_URL_AUDIO = 'https://api.cloudinary.com/v1_1/woeufsww/auto/upload';
+    // Cloudinary memperlakukan audio sebagai video, jadi gunakan endpoint
+    // video/upload secara eksplisit (bukan auto/upload) agar audio diterima.
+    const CLOUDINARY_URL_AUDIO = 'https://api.cloudinary.com/v1_1/woeufsww/video/upload';
 
     let recorderStream  = null;   // MediaStream dari mikrofon
     let mediaRecorder   = null;   // MediaRecorder aktif
@@ -477,87 +479,98 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
     }
 
     // Dipanggil otomatis saat MediaRecorder berhenti (event 'stop')
-    async function kirimRekaman() {
-      const btnMulai = $('#btn-mulai-rekam');
-      const btnStop  = $('#btn-berhenti-rekam');
-      const status   = $('#rec-status');
+        async function kirimRekaman() {
+          const btnMulai = $('#btn-mulai-rekam');
+          const btnStop  = $('#btn-berhenti-rekam');
+          const status   = $('#rec-status');
 
-      clearInterval(recTimerId);
+          clearInterval(recTimerId);
 
-      // Matikan lampu/izin mikrofon
-      if (recorderStream) {
-        recorderStream.getTracks().forEach((t) => t.stop());
-        recorderStream = null;
-      }
+          // Matikan lampu/izin mikrofon
+          if (recorderStream) {
+            recorderStream.getTracks().forEach((t) => t.stop());
+            recorderStream = null;
+          }
 
-      // Tidak ada data -> batalkan
-      if (recChunks.length === 0) {
-        if (status) status.textContent = 'Rekaman kosong. Coba rekam lagi.';
-        setelTombolRekamSelesai();
-        return;
-      }
+          // Tidak ada data -> batalkan
+          if (recChunks.length === 0) {
+            if (status) status.textContent = 'Rekaman kosong. Coba rekam lagi.';
+            setelTombolRekamSelesai();
+            return;
+          }
 
-      const mime = mediaRecorder ? mediaRecorder.mimeType : '';
-      const blob = new Blob(recChunks, { type: mime || 'audio/webm' });
+          const mime = mediaRecorder ? mediaRecorder.mimeType : '';
+          const blob = new Blob(recChunks, { type: mime || 'audio/webm' });
 
-      // Tentukan ekstensi sesuai tipe konten (Chrome: webm, Safari: mp4)
-      let ekstensi = 'webm';
-      if (/mp4/i.test(mime)) ekstensi = 'mp4';
-      else if (/ogg/i.test(mime)) ekstensi = 'ogg';
+          // Tentukan ekstensi sesuai tipe konten (Chrome: webm, Safari: mp4)
+          let ekstensi = 'webm';
+          if (/mp4/i.test(mime)) ekstensi = 'mp4';
+          else if (/ogg/i.test(mime)) ekstensi = 'ogg';
 
-      const file = new File([blob], 'setoran-' + Date.now() + '.' + ekstensi, { type: blob.type || 'audio/webm' });
+          const file = new File([blob], 'setoran-' + Date.now() + '.' + ekstensi, { type: blob.type || 'audio/webm' });
 
-      if (status) status.textContent = '⏳ Mengunggah rekaman ke Cloudinary...';
-      if (btnMulai) btnMulai.disabled = true;
-      if (btnStop)  btnStop.disabled  = true;
+          if (status) status.textContent = '⏳ Mengunggah rekaman ke Cloudinary...';
+          if (btnMulai) btnMulai.disabled = true;
+          if (btnStop)  btnStop.disabled  = true;
 
-      try {
-        // ===== A) Upload audio ke Cloudinary (resource_type auto) =====
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', UPLOAD_PRESET);
-        formData.append('resource_type', 'auto');
+          // ===== A) Upload audio ke Cloudinary =====
+          let audioUrl = '';
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', UPLOAD_PRESET);
+            formData.append('resource_type', 'video');   // audio diperlakukan sebagai video
 
-        const res = await fetch(CLOUDINARY_URL_AUDIO, { method: 'POST', body: formData });
-        if (!res.ok) throw new Error('Upload audio gagal (HTTP ' + res.status + ')');
-        const data = await res.json();
-        if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
+            const res = await fetch(CLOUDINARY_URL_AUDIO, { method: 'POST', body: formData });
+            if (!res.ok) throw new Error('Upload audio gagal (HTTP ' + res.status + ')');
 
-        const audioUrl = data.secure_url;
+            const data = await res.json();
+            if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
 
-        // ===== B) Simpan metadata ke Supabase =====
-        if (!(await tungguSupabase())) {
-          if (status) status.textContent = '⚠ Database tidak aktif. Rekaman belum tersimpan.';
-          alert('Database tidak aktif. Setoran hafalan tidak tersimpan.');
-          setelTombolRekamSelesai();
-          return;
+            audioUrl = data.secure_url;
+          } catch (error) {
+            console.error('Detail Error:', error);        // log detail untuk debugging
+            if (status) status.textContent = '⚠ Gagal mengunggah audio ke server.';
+            alert('Gagal mengunggah audio ke server.');
+            setelTombolRekamSelesai();
+            return;
+          }
+
+          // ===== B) Simpan metadata ke Supabase =====
+          // Pastikan client supabase benar-benar tersedia sebelum memanggil insert()
+          if (!supabase || !(await tungguSupabase())) {
+            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
+            alert('Audio terunggah, tapi gagal menyimpan ke database.');
+            setelTombolRekamSelesai();
+            return;
+          }
+
+          if (status) status.textContent = '⏳ Menyimpan ke database...';
+          try {
+            const { error: dbError } = await supabase
+              .from('tugas_murid')
+              .insert({
+                nama_murid: muridAktif || 'Murid',
+                jenis_kegiatan: 'Setoran Hafalan',
+                foto_url: audioUrl,
+              });
+            if (dbError) throw dbError;
+
+            // ===== C) Sukses: pratinjau + notifikasi =====
+            const preview = $('#rec-preview-audio');
+            if (preview) preview.src = audioUrl;
+            $('#rec-preview-wrap').classList.remove('hidden');
+            if (status) status.textContent = '✓ Setoran hafalan berhasil dikirim!';
+            alert('Alhamdulillah, setoran hafalan berhasil dikirim! 🎉');
+            toast('Setoran Hafalan Terkirim! ✅', 'fa-circle-check');
+          } catch (error) {
+            console.error('Detail Error:', error);        // log detail untuk debugging
+            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
+            alert('Audio terunggah, tapi gagal menyimpan ke database.');
+          } finally {
+            setelTombolRekamSelesai();
+          }
         }
-
-        if (status) status.textContent = '⏳ Menyimpan ke database...';
-        const { error: dbError } = await supabase
-          .from('tugas_murid')
-          .insert({
-            nama_murid: muridAktif || 'Murid',
-            jenis_kegiatan: 'Setoran Hafalan',
-            foto_url: audioUrl,
-          });
-        if (dbError) throw dbError;
-
-        // ===== C) Sukses: pratinjau + notifikasi =====
-        const preview = $('#rec-preview-audio');
-        if (preview) preview.src = audioUrl;
-        $('#rec-preview-wrap').classList.remove('hidden');
-        if (status) status.textContent = '✓ Setoran hafalan berhasil dikirim!';
-        alert('Alhamdulillah, setoran hafalan berhasil dikirim! 🎉');
-        toast('Setoran Hafalan Terkirim! ✅', 'fa-circle-check');
-      } catch (err) {
-        console.error('Gagal mengirim setoran hafalan:', err);
-        if (status) status.textContent = '⚠ Gagal mengirim setoran. Periksa koneksi.';
-        alert('Gagal mengirim setoran hafalan. Periksa koneksi Anda.');
-      } finally {
-        setelTombolRekamSelesai();
-      }
-    }
 
     // Kembalikan tombol ke kondisi awal
     function setelTombolRekamSelesai() {
