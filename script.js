@@ -8,54 +8,17 @@
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
 const UPLOAD_PRESET   = 'bdr_sdit';
 
-/* ---------- Konfigurasi & Inisialisasi Supabase (Fase 5) ----------
-   Library dimuat DINAMIS & NON-BLOCKING dari CDN (fallback jsDelivr -> unpkg).
-   Dipindahkan keluar dari <head> agar TIDAK PERNAH menghalangi halaman:
-   aplikasi & semua tombol selalu berfungsi, meski CDN lambat/gagal.
-   Fitur database menunggu library siap (maks 8 detik) lalu membaca/menulis. */
+/* ---------- Konfigurasi & Inisialisasi Supabase ----------
+   Client dibuat SINCHRON (persis dari window.supabase yang dimuat
+   CDN di <head> index.html), memakai nama variabel `db` agar TIDAK
+   bentrok dengan global `supabase` dari CDN itu sendiri. */
 const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
 const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
+const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-let supabase = null;   // instance client, diisi setelah library termuat
-
-// Memuat skrip eksternal via Promise (non-blocking)
-function muatScript(src) {
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = function () { resolve(); };
-    el.onerror = function () { reject(new Error('Gagal memuat ' + src)); };
-    document.head.appendChild(el);
-  });
-}
-
-// Promise yang resolve(true) bila Supabase siap, resolve(false) bila gagal.
-// Dijalankan otomatis di latar belakang — tidak memblokir apa pun.
-const janjiSupabase = (async () => {
-  try {
-    if (typeof window.supabase === 'undefined') {
-      try {
-        await muatScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
-      } catch (err1) {
-        await muatScript('https://unpkg.com/@supabase/supabase-js@2');
-      }
-    }
-    if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
-      supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-      console.log('✅ Supabase terhubung.');
-      return true;
-    }
-  } catch (err) {
-    console.warn('⚠ Gagal memuat Supabase:', err);
-  }
-  return false;
-})();
-
-// Menunggu Supabase siap (batas waktu). WAJIB di-await di setiap operasi DB.
-async function tungguSupabase(ms = 8000) {
-  if (supabase) return true;
-  await Promise.race([janjiSupabase, new Promise((r) => setTimeout(r, ms))]);
-  return !!supabase;
+// Fitur database memeriksa client `db` tersedia sebelum baca/tulis.
+function tungguSupabase() {
+  return !!db;
 }
 
 /* ---------- Helper singkat ---------- */
@@ -305,8 +268,8 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
         }
         if (status) status.textContent = '⏳ Menyimpan ke database...';
         try {
-          const { error: dbError } = await supabase
-        .from('tugas_murid')
+                  const { error: dbError } = await db
+                .from('tugas_murid')
         .insert({
           nama_murid: muridAktif || 'Murid',
           jenis_kegiatan: LABEL_KEGIATAN[key] || key,
@@ -537,18 +500,18 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
           }
 
           // ===== B) Simpan metadata ke Supabase =====
-          // Pastikan client supabase benar-benar tersedia sebelum memanggil insert()
-          if (!supabase || !(await tungguSupabase())) {
-            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
-            alert('Audio terunggah, tapi gagal menyimpan ke database.');
-            setelTombolRekamSelesai();
-            return;
-          }
+                // Pastikan client db benar-benar tersedia sebelum memanggil insert()
+                if (!db || !tungguSupabase()) {
+                  if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
+                  alert('Audio terunggah, tapi gagal menyimpan ke database.');
+                  setelTombolRekamSelesai();
+                  return;
+                }
 
-          if (status) status.textContent = '⏳ Menyimpan ke database...';
-          try {
-            const { error: dbError } = await supabase
-              .from('tugas_murid')
+                if (status) status.textContent = '⏳ Menyimpan ke database...';
+                try {
+                  const { error: dbError } = await db
+                    .from('tugas_murid')
               .insert({
                 nama_murid: muridAktif || 'Murid',
                 jenis_kegiatan: 'Setoran Hafalan',
@@ -652,7 +615,7 @@ async function renderTabelNilai() {
     // Ambil nilai yang sudah tersimpan (untuk mengisi ulang dropdown/input)
   let nilaiMap = {};
   try {
-    const { data, error } = await supabase.from('nilai_quran').select('*');
+    const { data, error } = await db.from('nilai_quran').select('*');
     if (error) throw error;
     (data || []).forEach((r) => { nilaiMap[r.nama_murid] = r; });
   } catch (err) {
@@ -767,7 +730,7 @@ $('#wrap-tabel-nilai').addEventListener('click', async (e) => {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
 
   try {
-    const { error } = await supabase.from('nilai_quran').insert({
+    const { error } = await db.from('nilai_quran').insert({
       nama_murid: nama,
       nilai_murajaah: nilai.murajaah || null,
       status_hafalan: nilai.hafalan || '',
@@ -799,7 +762,7 @@ $('#btn-simpan-semua').addEventListener('click', async () => {
       const n = ambilNilaiRow(m.nama);
       if (!n.murajaah && !n.hafalan && !n.wafa) continue;
 
-      const { error } = await supabase.from('nilai_quran').insert({
+      const { error } = await db.from('nilai_quran').insert({
         nama_murid: m.nama,
         nilai_murajaah: n.murajaah || null,
         status_hafalan: n.hafalan || '',
@@ -823,7 +786,7 @@ $('#btn-reset-nilai').addEventListener('click', async () => {
   if (!(await tungguSupabase())) return;
 
   try {
-    const { error } = await supabase.from('nilai_quran').delete();
+    const { error } = await db.from('nilai_quran').delete();
     if (error) throw error;
     renderTabelNilai();
     toast('Nilai di-reset ke awal.', 'fa-rotate-left');
@@ -860,7 +823,7 @@ async function renderGaleriTugas() {
 
     try {
     // Tarik data galeri langsung dari Supabase (bukan localStorage)
-    const { data, error } = await supabase.from('tugas_murid').select('*');
+    const { data, error } = await db.from('tugas_murid').select('*');
     if (error) throw error;
 
     grid.innerHTML = '';
