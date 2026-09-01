@@ -9,15 +9,54 @@ const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
 const UPLOAD_PRESET   = 'bdr_sdit';
 
 /* ---------- Konfigurasi & Inisialisasi Supabase ----------
-   Client dibuat SINCHRON (persis dari window.supabase yang dimuat
-   CDN di <head> index.html), memakai nama variabel `db` agar TIDAK
-   bentrok dengan global `supabase` dari CDN itu sendiri. */
+   Client memakai nama `db` (bukan `supabase`) agar TIDAK bentrok
+   dengan global `supabase` dari CDN. Inisialisasi dilakukan TRYGGT
+   & LAZY (non-blocking):
+   - Jika window.supabase sudah ada -> langsung buat client-nya.
+   - Jika belum -> CDN dimuat dinamis (fallback jsDelivr -> unpkg).
+   PENTING: tidak pernah melempar error saat load, jadi seluruh
+   aplikasi (login murid/guru, navigasi) tetap berfungsi walau
+   database belum tersedia. */
 const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
 const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
-const db = window.supabase.createClient(supabaseUrl, supabaseKey);
+let db = null;   // client `db`, diisi lazy oleh inisialiseraDb()
 
-// Fitur database memeriksa client `db` tersedia sebelum baca/tulis.
-function tungguSupabase() {
+// Memuat skrip eksternal via Promise (non-blocking)
+function muatScript(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = function () { resolve(); };
+    el.onerror = function () { reject(new Error('Gagal memuat ' + src)); };
+    document.head.appendChild(el);
+  });
+}
+
+// Membuat client `db` bila memungkinkan (memuat CDN kalau perlu).
+// TIDAK PERNAH melempar error agar halaman tidak ikut mati.
+async function inisialiseraDb() {
+  try {
+    if (typeof window.supabase === 'undefined') {
+      try {
+        await muatScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+      } catch (err1) {
+        await muatScript('https://unpkg.com/@supabase/supabase-js@2');
+      }
+    }
+    if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+      db = window.supabase.createClient(supabaseUrl, supabaseKey);
+      console.log('✅ Supabase terhubung.');
+    }
+  } catch (err) {
+    console.warn('⚠ Gagal inisialisera Supabase:', err);
+  }
+}
+
+// Menunggu client `db` siap (lazy init). WAJIB di-await di tiap operasi DB.
+// Kalau Supabase tidak tersedia -> return false (aplikasi tetap jalan).
+async function tungguSupabase(ms = 8000) {
+  if (db) return true;
+  await Promise.race([inisialiseraDb(), new Promise((r) => setTimeout(r, ms))]);
   return !!db;
 }
 
@@ -500,13 +539,13 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
           }
 
           // ===== B) Simpan metadata ke Supabase =====
-                // Pastikan client db benar-benar tersedia sebelum memanggil insert()
-                if (!db || !tungguSupabase()) {
-                  if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
-                  alert('Audio terunggah, tapi gagal menyimpan ke database.');
-                  setelTombolRekamSelesai();
-                  return;
-                }
+                          // Pastikan client db benar-benar tersedia sebelum memanggil insert()
+                          if (!(await tungguSupabase())) {
+                            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
+                            alert('Audio terunggah, tapi gagal menyimpan ke database.');
+                            setelTombolRekamSelesai();
+                            return;
+                          }
 
                 if (status) status.textContent = '⏳ Menyimpan ke database...';
                 try {
