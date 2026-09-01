@@ -171,9 +171,23 @@
           <div class="page-head">
             <h2 id="sapaan-murid">Selamat datang! 👋</h2>
             <p class="muted">Semangat belajar dari rumah hari ini!</p>
-          </div>
+                      </div>
 
-          <!-- Profil singkat -->
+                      <!-- FASE 6 (BARU): Widget Kualitas Udara (AQI) -->
+                      <div class="card aqi-card" id="aqi-card">
+                        <div class="aqi-head">
+                          <span class="aqi-icon"><i class="fa-solid fa-wind"></i></span>
+                          <div>
+                            <h3>Kualitas Udara (AQI)</h3>
+                            <p class="muted" id="aqi-lokasi">Banjarmasin, Kalimantan</p>
+                          </div>
+                          <span class="aqi-value" id="aqi-value">—</span>
+                        </div>
+                        <p class="aqi-status" id="aqi-status">Mengambil data kualitas udara...</p>
+                        <div class="aqi-bar"><div class="aqi-fill" id="aqi-fill"></div></div>
+                      </div>
+
+                      <!-- Profil singkat -->
           <div class="profile-card card">
         <div class="avatar" id="murid-avatar"><i class="fa-solid fa-user-graduate"></i></div>
         <div class="profile-info">
@@ -239,10 +253,34 @@
                     <input type="file" id="file-life-skill" class="file-foto hidden-file"
                            data-kegiatan="life-skill" accept="image/*">
                   </div>
-                </div>
-              </div>
+                                  </div>
+                                </div>
 
-      <!-- Mini info tugas (dummy) -->
+                        <!-- FASE 6 (BARU): Setoran Hafalan Mandiri (Perekam Suara) -->
+                        <div class="card recorder-card">
+                          <div class="card-title">
+                            <h3><i class="fa-solid fa-microphone-lines"></i> Setoran Hafalan Mandiri</h3>
+                          </div>
+                          <p class="muted">Rekam hafalanmu lalu kirim ke ustadz/ustadzah. Pastikan suara jelas ya!</p>
+
+                          <div class="recorder-controls">
+                            <button class="btn btn-primary" id="btn-mulai-rekam">
+                              <i class="fa-solid fa-microphone"></i> Mulai Rekam 🎙️
+                            </button>
+                            <button class="btn btn-danger hidden" id="btn-berhenti-rekam">
+                              <i class="fa-solid fa-stop"></i> Berhenti Rekam 🛑
+                            </button>
+                            <span class="rec-timer muted" id="rec-timer">00:00</span>
+                          </div>
+
+                          <p class="rec-status muted" id="rec-status">Belum ada rekaman.</p>
+
+                          <div class="rec-preview hidden" id="rec-preview-wrap">
+                            <audio id="rec-preview-audio" controls></audio>
+                          </div>
+                        </div>
+
+                        <!-- Mini info tugas (dummy) -->
       <div class="card task-info">
         <h3><i class="fa-solid fa-file-circle-question"></i> Tugas Terbaru</h3>
         <p><b>Matematika:</b> Pecahan sederhana (halaman 42–45).</p>

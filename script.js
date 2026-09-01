@@ -334,12 +334,264 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
       btn.innerHTML = teksAsliTombol;
     }
     input.value = '';   // reset agar file yang sama bisa dipilih lagi
-  }
-});
+      }
+    });
 
-/* ============================================================
-   HALAMAN 2 -> LOGIN GURU (password)
-   ============================================================ */
+    /* ============================================================
+       FASE 6 (BARU): WIDGET KUALITAS UDARA (AQI)
+       - Mengambil data AQI dari Open-Meteo Air Quality API
+         (gratis, tanpa API key), koordinat default: Banjarmasin.
+       - Jika API tidak bisa diakses, gunakan data cadangan statis (120).
+       - Jika AQI > 100 widget berubah oranye/merah + pesan peringatan.
+       ============================================================ */
+    async function fetchAQI() {
+      const aqiCard  = $('#aqi-card');
+      if (!aqiCard) return;
+
+      let aqi = null;
+      let sumber = 'Open-Meteo';
+      try {
+        const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=-3.32&longitude=114.59&hourly=us_aqi&timezone=auto&forecast_days=1';
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        const data = await res.json();
+        const daftar = (data && data.hourly && data.hourly.us_aqi) || [];
+        // Ambil nilai terbaru yang tersedia
+        const nilaiTerakhir = [...daftar].reverse().find((v) => v !== null && v !== undefined);
+        if (typeof nilaiTerakhir === 'number') aqi = Math.round(nilaiTerakhir);
+      } catch (err) {
+        console.warn('⚠ Gagal ambil AQI dari API:', err);
+      }
+
+      // Fallback statis bila API sulit diakses (sesuai instruksi Fase 6)
+      if (aqi === null || isNaN(aqi)) {
+        aqi = 120;      // dummy
+        sumber = 'data cadangan';
+      }
+
+      tampilkanAQI(aqi, sumber);
+    }
+
+    function tampilkanAQI(aqi, sumber) {
+      const aqiCard  = $('#aqi-card');
+      const elValue  = $('#aqi-value');
+      const elStatus = $('#aqi-status');
+      const elFill   = $('#aqi-fill');
+      const elLokasi = $('#aqi-lokasi');
+      if (!aqiCard) return;
+
+      let level = 'Baik';
+      let pesan = 'Udara bersih. Ayo beraktivitas di luar!';
+      let kelas = 'aqi-baik';
+
+      if (aqi <= 50) {
+        level = 'Baik';
+        pesan = 'Udara bersih. Ayo beraktivitas di luar!';
+        kelas = 'aqi-baik';
+      } else if (aqi <= 100) {
+        level = 'Sedang';
+        pesan = 'Udara sedang. Tetap jaga kesehatan ya!';
+        kelas = 'aqi-sedang';
+      } else if (aqi <= 200) {
+        level = 'Kurang Sehat';
+        pesan = 'Udara sedang kurang sehat. Tetap di dalam rumah dan perbanyak minum air putih ya!';
+        kelas = 'aqi-kurang';
+      } else {
+        level = 'Sangat Tidak Sehat';
+        pesan = 'Udara sedang kurang sehat. Tetap di dalam rumah dan perbanyak minum air putih ya!';
+        kelas = 'aqi-buruk';
+      }
+
+      // Ganti kelas warna widget
+      aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
+      aqiCard.classList.add(kelas);
+
+      if (elValue)  elValue.textContent  = aqi;
+      if (elLokasi) elLokasi.textContent = 'Banjarmasin, Kalimantan • ' + sumber;
+      if (elStatus) elStatus.textContent = level + ' (AQI ' + aqi + '). ' + pesan;
+      if (elFill)   elFill.style.width   = Math.min(100, (aqi / 300) * 100) + '%';
+    }
+
+    /* ============================================================
+       FASE 6 (BARU): SETORAN HAFALAN MANDIRI (PERekAM SUARA)
+       - Alur: getUserMedia -> MediaRecorder -> Blob -> File (.webm/.mp4)
+               -> Cloudinary (auto/upload) -> Supabase (tugas_murid),
+         dengan jenis_kegiatan "Setoran Hafalan".
+       ============================================================ */
+    const CLOUDINARY_URL_AUDIO = 'https://api.cloudinary.com/v1_1/woeufsww/auto/upload';
+
+    let recorderStream  = null;   // MediaStream dari mikrofon
+    let mediaRecorder   = null;   // MediaRecorder aktif
+    let recChunks       = [];     // potongan data rekaman
+    let recTimerId      = null;   // id interval timer
+    let recDetik        = 0;      // durasi rekaman (detik)
+
+    function formatDurasi(detik) {
+      const m = String(Math.floor(detik / 60)).padStart(2, '0');
+      const s = String(detik % 60).padStart(2, '0');
+      return m + ':' + s;
+    }
+
+    async function mulaiRekam() {
+      const btnMulai = $('#btn-mulai-rekam');
+      const btnStop  = $('#btn-berhenti-rekam');
+      const status   = $('#rec-status');
+
+      // Cek dukungan browser terlebih dahulu
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        alert('Browser kamu tidak mendukung perekaman suara (MediaRecorder). Gunakan Chrome/Edge/Firefox terbaru.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorderStream = stream;
+        mediaRecorder = new MediaRecorder(stream);
+        recChunks = [];
+
+        mediaRecorder.addEventListener('dataavailable', (e) => {
+          if (e.data && e.data.size > 0) recChunks.push(e.data);
+        });
+        // Saat rekaman berhenti -> kirim hasilnya
+        mediaRecorder.addEventListener('stop', kirimRekaman);
+
+        mediaRecorder.start();
+
+        // UI mode merekam
+        btnMulai.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        recDetik = 0;
+        $('#rec-timer').textContent = formatDurasi(0);
+        recTimerId = setInterval(() => {
+          recDetik += 1;
+          $('#rec-timer').textContent = formatDurasi(recDetik);
+        }, 1000);
+        if (status) status.textContent = '🔴 Merekam... Klik "Berhenti Rekam" saat selesai.';
+        $('#rec-preview-wrap').classList.add('hidden');
+        toast('Perekaman dimulai 🎙️', 'fa-microphone');
+      } catch (err) {
+        console.error('Gagal akses mikrofon:', err);
+        alert('Tidak bisa mengakses mikrofon. Izinkan akses mikrofon di browser, lalu coba lagi.');
+      }
+    }
+
+    // Dipanggil otomatis saat MediaRecorder berhenti (event 'stop')
+    async function kirimRekaman() {
+      const btnMulai = $('#btn-mulai-rekam');
+      const btnStop  = $('#btn-berhenti-rekam');
+      const status   = $('#rec-status');
+
+      clearInterval(recTimerId);
+
+      // Matikan lampu/izin mikrofon
+      if (recorderStream) {
+        recorderStream.getTracks().forEach((t) => t.stop());
+        recorderStream = null;
+      }
+
+      // Tidak ada data -> batalkan
+      if (recChunks.length === 0) {
+        if (status) status.textContent = 'Rekaman kosong. Coba rekam lagi.';
+        setelTombolRekamSelesai();
+        return;
+      }
+
+      const mime = mediaRecorder ? mediaRecorder.mimeType : '';
+      const blob = new Blob(recChunks, { type: mime || 'audio/webm' });
+
+      // Tentukan ekstensi sesuai tipe konten (Chrome: webm, Safari: mp4)
+      let ekstensi = 'webm';
+      if (/mp4/i.test(mime)) ekstensi = 'mp4';
+      else if (/ogg/i.test(mime)) ekstensi = 'ogg';
+
+      const file = new File([blob], 'setoran-' + Date.now() + '.' + ekstensi, { type: blob.type || 'audio/webm' });
+
+      if (status) status.textContent = '⏳ Mengunggah rekaman ke Cloudinary...';
+      if (btnMulai) btnMulai.disabled = true;
+      if (btnStop)  btnStop.disabled  = true;
+
+      try {
+        // ===== A) Upload audio ke Cloudinary (resource_type auto) =====
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', UPLOAD_PRESET);
+        formData.append('resource_type', 'auto');
+
+        const res = await fetch(CLOUDINARY_URL_AUDIO, { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Upload audio gagal (HTTP ' + res.status + ')');
+        const data = await res.json();
+        if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
+
+        const audioUrl = data.secure_url;
+
+        // ===== B) Simpan metadata ke Supabase =====
+        if (!(await tungguSupabase())) {
+          if (status) status.textContent = '⚠ Database tidak aktif. Rekaman belum tersimpan.';
+          alert('Database tidak aktif. Setoran hafalan tidak tersimpan.');
+          setelTombolRekamSelesai();
+          return;
+        }
+
+        if (status) status.textContent = '⏳ Menyimpan ke database...';
+        const { error: dbError } = await supabase
+          .from('tugas_murid')
+          .insert({
+            nama_murid: muridAktif || 'Murid',
+            jenis_kegiatan: 'Setoran Hafalan',
+            foto_url: audioUrl,
+          });
+        if (dbError) throw dbError;
+
+        // ===== C) Sukses: pratinjau + notifikasi =====
+        const preview = $('#rec-preview-audio');
+        if (preview) preview.src = audioUrl;
+        $('#rec-preview-wrap').classList.remove('hidden');
+        if (status) status.textContent = '✓ Setoran hafalan berhasil dikirim!';
+        alert('Alhamdulillah, setoran hafalan berhasil dikirim! 🎉');
+        toast('Setoran Hafalan Terkirim! ✅', 'fa-circle-check');
+      } catch (err) {
+        console.error('Gagal mengirim setoran hafalan:', err);
+        if (status) status.textContent = '⚠ Gagal mengirim setoran. Periksa koneksi.';
+        alert('Gagal mengirim setoran hafalan. Periksa koneksi Anda.');
+      } finally {
+        setelTombolRekamSelesai();
+      }
+    }
+
+    // Kembalikan tombol ke kondisi awal
+    function setelTombolRekamSelesai() {
+      const btnMulai = $('#btn-mulai-rekam');
+      const btnStop  = $('#btn-berhenti-rekam');
+      if (btnMulai) { btnMulai.disabled = false; btnMulai.classList.remove('hidden'); }
+      if (btnStop)  { btnStop.disabled  = false; btnStop.classList.add('hidden'); }
+      mediaRecorder = null;
+      recChunks = [];
+    }
+
+    // Event tombol rekam
+    $('#btn-mulai-rekam').addEventListener('click', mulaiRekam);
+    $('#btn-berhenti-rekam').addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        const status = $('#rec-status');
+        if (status) status.textContent = '⏳ Mengirim rekaman...';
+        mediaRecorder.stop();     // memicu event 'stop' -> kirimRekaman()
+      }
+    });
+
+    // Keamanan: matikan mikrofon bila halaman ditutup/ditinggalkan
+    window.addEventListener('pagehide', () => {
+      clearInterval(recTimerId);
+      if (recorderStream) {
+        recorderStream.getTracks().forEach((t) => t.stop());
+        recorderStream = null;
+      }
+      mediaRecorder = null;
+    });
+
+    /* ============================================================
+       HALAMAN 2 -> LOGIN GURU (password)
+       ============================================================ */
 $('#toggle-pass').addEventListener('click', () => {
   const input = $('#password');
   const isHidden = input.type === 'password';
@@ -614,12 +866,25 @@ async function renderGaleriTugas() {
     data.forEach((t) => {
       const card = document.createElement('div');
       card.className = 'gallery-card';
+
+      const url = t.foto_url || '';
+      // FASE 6: jika URL berakhiran .webm/.mp4/.mp3 -> render pemutar audio
+      const adalahAudio = /\.(webm|mp4|mp3)(?:[?#]|$)/i.test(url);
+
+      const mediaHtml = adalahAudio
+        ? `
+          <div class="photo photo-audio">
+            <audio controls preload="none" src="${url}"></audio>
+          </div>`
+        : `
+          <div class="photo">
+            <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
+            <img src="${url}" alt="Bukti foto ${t.nama_murid}" loading="lazy" onerror="this.remove()">
+            <span class="status-pill">Diserahkan</span>
+          </div>`;
+
       card.innerHTML = `
-        <div class="photo">
-          <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
-          <img src="${t.foto_url}" alt="Bukti foto ${t.nama_murid}" loading="lazy" onerror="this.remove()">
-          <span class="status-pill">Diserahkan</span>
-        </div>
+        ${mediaHtml}
         <div class="gallery-body">
           <div class="g-name">${t.nama_murid || 'Murid'}</div>
           <div class="g-title"><i class="fa-solid fa-tag"></i> ${t.jenis_kegiatan || 'Kegiatan'}</div>
@@ -734,6 +999,7 @@ function cekSession() {
    ============================================================ */
 function init() {
   isiDropdownMurid();
+  fetchAQI();             // FASE 6: widget kualitas udara (AQI)
   renderTabelNilai();     // ambil nilai_quran dari Supabase
   renderGaleriTugas();    // ambil tugas_murid dari Supabase
   renderChecklistWali();

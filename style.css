@@ -623,6 +623,104 @@ main {
 }
 
 /* ============================================================
+   FASE 6 (BARU): WIDGET AQI & PEREKAM SUARA
+   ============================================================ */
+
+/* ---- Widget Kualitas Udara (AQI) ---- */
+.aqi-card {
+  position: relative;
+  border-left: 5px solid var(--sukses);
+  margin-bottom: 1.1rem;
+  transition: border-color .3s ease, background .3s ease;
+}
+.aqi-card.aqi-sedang { border-left-color: var(--kuning); }
+.aqi-card.aqi-kurang { border-left-color: #f08a24; background: #fff8f0; }
+.aqi-card.aqi-buruk  { border-left-color: var(--hati); background: var(--merah-muda); }
+
+.aqi-head {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+}
+.aqi-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  font-size: 1.2rem;
+  color: #fff;
+  background: linear-gradient(140deg, var(--biru-4), var(--biru-6));
+}
+.aqi-head h3 { font-size: .98rem; color: var(--biru-gelap); }
+.aqi-head p { font-size: .78rem; margin: 0; }
+
+.aqi-value {
+  margin-left: auto;
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--biru-gelap);
+}
+.aqi-card.aqi-kurang .aqi-value,
+.aqi-card.aqi-buruk .aqi-value { color: var(--hati); }
+
+.aqi-status { margin-top: .7rem; font-size: .86rem; font-weight: 600; }
+.aqi-card.aqi-kurang .aqi-status,
+.aqi-card.aqi-buruk .aqi-status { color: #b45309; }
+
+.aqi-bar {
+  margin-top: .6rem;
+  height: 8px;
+  background: var(--biru-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.aqi-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--sukses), var(--kuning), var(--hati));
+  transition: width .6s ease;
+}
+.aqi-card.aqi-kurang .aqi-fill,
+.aqi-card.aqi-buruk .aqi-fill { background: linear-gradient(90deg, #f08a24, var(--hati)); }
+
+/* ---- Setoran Hafalan (perekam suara) ---- */
+.btn-danger {
+  background: linear-gradient(135deg, #e35d5d, #e93f5a);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(233, 63, 90, .3);
+}
+.btn-danger:hover { box-shadow: 0 10px 22px rgba(233, 63, 90, .4); }
+
+.recorder-controls {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  flex-wrap: wrap;
+  margin-top: .9rem;
+}
+.rec-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  background: var(--biru-1);
+  border-radius: 999px;
+  padding: .35rem .7rem;
+}
+.rec-status { margin-top: .8rem; font-size: .85rem; }
+.rec-preview { margin-top: .8rem; }
+.rec-preview audio { width: 100%; }
+
+/* ---- Audio pada galeri wali kelas (FASE 6) ---- */
+.photo.photo-audio { padding: 0 .8rem; }
+.photo.photo-audio audio {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 42px;
+}
+
+/* ============================================================
    HALAMAN 5 : BUKU NILAI AL-QUR'AN
    ============================================================ */
 .table-card { padding: .6rem 1rem 1rem; }
