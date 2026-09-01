@@ -9,30 +9,53 @@ const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
 const UPLOAD_PRESET   = 'bdr_sdit';
 
 /* ---------- Konfigurasi & Inisialisasi Supabase (Fase 5) ----------
-   DIBUNGKUS PROTEKSI: jika CDN gagal termuat (offline/diblokir) atau
-   URL/key tidak valid, APLIKASI TETAP BERJALAN — fitur database hanya
-   menampilkan peringatan ramah alih-alih mematikan seluruh script. */
+   Library dimuat DINAMIS & NON-BLOCKING dari CDN (fallback jsDelivr -> unpkg).
+   Dipindahkan keluar dari <head> agar TIDAK PERNAH menghalangi halaman:
+   aplikasi & semua tombol selalu berfungsi, meski CDN lambat/gagal.
+   Fitur database menunggu library siap (maks 8 detik) lalu membaca/menulis. */
 const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
 const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
 
-let supabase = null;
-try {
-  if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-    console.log('✅ Supabase terhubung.');
-  } else {
-    console.warn('⚠ window.supabase tidak tersedia. Pastikan CDN @supabase/supabase-js@2 termuat.');
-  }
-} catch (err) {
-  console.error('⚠ Gagal menginisialisasi Supabase:', err);
+let supabase = null;   // instance client, diisi setelah library termuat
+
+// Memuat skrip eksternal via Promise (non-blocking)
+function muatScript(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = function () { resolve(); };
+    el.onerror = function () { reject(new Error('Gagal memuat ' + src)); };
+    document.head.appendChild(el);
+  });
 }
 
-// Cek ketersediaan Supabase sebelum operasi database.
-// denganAlert=false dipakai fungsi render (cukup tampilkan pesan visual di panel).
-function supabaseSiap(denganAlert = true) {
-  if (supabase) return true;
-  if (denganAlert) alert('Fitur database belum aktif. Periksa koneksi internet atau CDN Supabase.');
+// Promise yang resolve(true) bila Supabase siap, resolve(false) bila gagal.
+// Dijalankan otomatis di latar belakang — tidak memblokir apa pun.
+const janjiSupabase = (async () => {
+  try {
+    if (typeof window.supabase === 'undefined') {
+      try {
+        await muatScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+      } catch (err1) {
+        await muatScript('https://unpkg.com/@supabase/supabase-js@2');
+      }
+    }
+    if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+      supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+      console.log('✅ Supabase terhubung.');
+      return true;
+    }
+  } catch (err) {
+    console.warn('⚠ Gagal memuat Supabase:', err);
+  }
   return false;
+})();
+
+// Menunggu Supabase siap (batas waktu). WAJIB di-await di setiap operasi DB.
+async function tungguSupabase(ms = 8000) {
+  if (supabase) return true;
+  await Promise.race([janjiSupabase, new Promise((r) => setTimeout(r, ms))]);
+  return !!supabase;
 }
 
 /* ---------- Helper singkat ---------- */
@@ -242,7 +265,7 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
   const btn    = $(`.btn-upload-foto[data-kegiatan="${CSS.escape(key)}"]`);
   const prev   = $(`#preview-${key}`);
   const status = $(`#status-${key}`);
-  const teksAsliTombol = btn?.innerHTML || '';
+  const teksAsliTombol = (btn && btn.innerHTML) || '';
 
   // --- Indikator loading: ubah teks tombol & nonaktifkan (cegah klik 2x) ---
   if (btn) {
@@ -276,13 +299,13 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
     }
 
     // ===== B) Simpan metadata tugas ke Supabase (tabel tugas_murid) =====
-        if (!supabaseSiap()) {
+        if (!(await tungguSupabase())) {
           if (status) status.textContent = '⚠ Database tidak aktif';
           return;
         }
         if (status) status.textContent = '⏳ Menyimpan ke database...';
         try {
-      const { error: dbError } = await supabase
+          const { error: dbError } = await supabase
         .from('tugas_murid')
         .insert({
           nama_murid: muridAktif || 'Murid',
@@ -355,8 +378,8 @@ async function renderTabelNilai() {
   // Indikator pemuatan sebelum data dari server tiba
     wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-spinner fa-spin"></i> Memuat buku nilai...</p>';
 
-    // Database tidak tersedia -> tampilkan pesan, jangan lanjut (mati mendadak)
-    if (!supabaseSiap(false)) {
+    // Database tidak tersedia -> tampilkan pesan, jangan lanjut
+    if (!(await tungguSupabase())) {
       wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-triangle-exclamation"></i> Database tidak tersedia.</p>';
       return;
     }
@@ -405,7 +428,7 @@ async function renderTabelNilai() {
         </td>
         <td>
           <input type="text" class="form-input input-wafa" data-nama="${m.nama}" data-kolom="wafa"
-                 placeholder="Hal. 14" value="${nilai.catatan_wafa ?? ''}">
+                 placeholder="Hal. 14" value="${nilai.catatan_wafa || ''}">
         </td>
         <td>
           <button class="btn btn-small btn-primary btn-simpan-nilai" data-nama="${m.nama}">
@@ -433,17 +456,21 @@ async function renderTabelNilai() {
 
 // Baca nilai satu baris dari input yang sedang tampil di layar
 function ambilNilaiRow(nama) {
+  const elM     = $(`.select-murajaah[data-nama="${CSS.escape(nama)}"]`);
+  const elH     = $(`.select-hafalan[data-nama="${CSS.escape(nama)}"]`);
+  const elW     = $(`.input-wafa[data-nama="${CSS.escape(nama)}"]`);
+
   return {
-    murajaah: Number($(`.select-murajaah[data-nama="${CSS.escape(nama)}"]`)?.value || 0),
-    hafalan:  $(`.select-hafalan[data-nama="${CSS.escape(nama)}"]`)?.value || '',
-    wafa:     $(`.input-wafa[data-nama="${CSS.escape(nama)}"]`)?.value.trim() || '',
+    murajaah: elM ? Number(elM.value) : 0,
+    hafalan:  elH ? elH.value : '',
+    wafa:     elW ? elW.value.trim() : '',
   };
 }
 
 // Efek visual: baris & tombol berubah hijau sesaat setelah tersimpan
 function tandaiRowTersimpan(nama) {
   const btn = $(`.btn-simpan-nilai[data-nama="${CSS.escape(nama)}"]`);
-  const tr  = btn?.closest('tr');
+  const tr  = btn ? btn.closest('tr') : null;
   if (!tr) return;
   tr.classList.add('saved-row');
   btn.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan';
@@ -468,7 +495,7 @@ $('#wrap-tabel-nilai').addEventListener('click', async (e) => {
   const nama = btn.dataset.nama;
     const nilai = ambilNilaiRow(nama);
 
-    if (!supabaseSiap()) return;   // jangan disable tombol jika DB tidak aktif
+    if (!(await tungguSupabase())) return;  // jangan disable tombol jika DB tidak aktif
 
     // Indikator loading pada tombol
     btn.disabled = true;
@@ -496,7 +523,7 @@ $('#wrap-tabel-nilai').addEventListener('click', async (e) => {
 
 // Simpan semua sekaligus -> insert per baris ke nilai_quran
 $('#btn-simpan-semua').addEventListener('click', async () => {
-  if (!supabaseSiap()) return;   // jangan disable tombol jika DB tidak aktif
+  if (!(await tungguSupabase())) return;  // jangan disable tombol jika DB tidak aktif
 
   const btn = $('#btn-simpan-semua');
   btn.disabled = true;
@@ -528,7 +555,7 @@ $('#btn-simpan-semua').addEventListener('click', async () => {
 // Reset: hapus semua baris nilai_quran di Supabase
 $('#btn-reset-nilai').addEventListener('click', async () => {
   if (!confirm('Yakin ingin menghapus semua nilai?')) return;
-  if (!supabaseSiap()) return;
+  if (!(await tungguSupabase())) return;
 
   try {
     const { error } = await supabase.from('nilai_quran').delete();
@@ -557,7 +584,7 @@ async function renderGaleriTugas() {
       </div>`;
 
     // Database tidak tersedia -> tampilkan pesan, jangan teruskan
-    if (!supabaseSiap(false)) {
+    if (!(await tungguSupabase())) {
       grid.innerHTML = `
         <div class="empty-state">
           <i class="fa-solid fa-triangle-exclamation"></i>

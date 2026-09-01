@@ -14,10 +14,9 @@
 
   <link rel="stylesheet" href="style.css">
 
-    <!-- FASE 5 (BARU): Supabase Client v2 via CDN (harus dimuat sebelum script.js).
-           Onerror = cadangan otomatis dari unpkg bila jsDelivr gagal diakses. -->
-      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
-              onerror="var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2';document.head.appendChild(s);"></script>
+    <!-- FASE 5: library Supabase TIDAK lagi dimuat di <head> (agar tidak pernah
+           menghalangi halaman). Ia dimuat DINAMIS & non-blocking oleh script.js
+           dengan fallback jsDelivr -> unpkg. -->
   </head>
 <body>
 
