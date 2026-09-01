@@ -347,33 +347,79 @@ $('#dashboard-murid').addEventListener('change', async (e) => {
        - Jika AQI > 100 widget berubah oranye/merah + pesan peringatan.
        ============================================================ */
     async function fetchAQI() {
-      const aqiCard  = $('#aqi-card');
-      if (!aqiCard) return;
+          const aqiCard  = $('#aqi-card');
+          if (!aqiCard) return;
 
-      let aqi = null;
-      let sumber = 'Open-Meteo';
-      try {
-        const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=-3.32&longitude=114.59&hourly=us_aqi&timezone=auto&forecast_days=1';
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+          const elValue  = $('#aqi-value');
+          const elStatus = $('#aqi-status');
+          const elFill   = $('#aqi-fill');
+          const elLokasi = $('#aqi-lokasi');
 
-        const data = await res.json();
-        const daftar = (data && data.hourly && data.hourly.us_aqi) || [];
-        // Ambil nilai terbaru yang tersedia
-        const nilaiTerakhir = [...daftar].reverse().find((v) => v !== null && v !== undefined);
-        if (typeof nilaiTerakhir === 'number') aqi = Math.round(nilaiTerakhir);
-      } catch (err) {
-        console.warn('⚠ Gagal ambil AQI dari API:', err);
-      }
+          try {
+            // ===== A) Panggil Open-Meteo Air Quality API sungguhan (tanpa API key) =====
+            const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=-3.27&longitude=114.60&current=us_aqi';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
 
-      // Fallback statis bila API sulit diakses (sesuai instruksi Fase 6)
-      if (aqi === null || isNaN(aqi)) {
-        aqi = 120;      // dummy
-        sumber = 'data cadangan';
-      }
+            const data = await res.json();
 
-      tampilkanAQI(aqi, sumber);
-    }
+            // Nilai AQI ada di dalam objek current.us_aqi
+            const aqi = (data && data.current && typeof data.current.us_aqi === 'number')
+              ? Math.round(data.current.us_aqi)
+              : null;
+
+            if (aqi === null || isNaN(aqi)) {
+              throw new Error('Nilai current.us_aqi tidak ditemukan di respons API');
+            }
+
+            // ===== B) Pengkondisian level AQI (standar AQI) + warna latar widget =====
+            let pesan   = '';
+            let warnaBg = '';        // warna latar belakang widget
+            let kelasK  = '';        // kelas warna bawaan CSS (border + teks)
+
+            if (aqi <= 50) {
+              // Hijau
+              pesan   = 'Udara segar. Aman untuk beraktivitas.';
+              warnaBg = '#e3f7f1';
+              kelasK  = 'aqi-baik';
+            } else if (aqi <= 100) {
+              // Kuning
+              pesan   = 'Kualitas udara sedang. Jaga kesehatan.';
+              warnaBg = '#fff7e6';
+              kelasK  = 'aqi-sedang';
+            } else if (aqi <= 150) {
+              // Oranye
+              pesan   = 'Udara kurang sehat untuk kelompok sensitif. Kurangi aktivitas luar.';
+              warnaBg = '#fff8f0';
+              kelasK  = 'aqi-kurang';
+            } else {
+              // Merah
+              pesan   = 'Awas Kabut Asap! Udara tidak sehat, tetap di rumah dan pakai masker!';
+              warnaBg = '#fdeaea';
+              kelasK  = 'aqi-buruk';
+            }
+
+            // ===== C) Perbarui elemen HTML widget =====
+            // Hapus kelas warna lama, terapkan yang baru, lalu warnai latar belakang widget
+            aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
+            aqiCard.classList.add(kelasK);
+            aqiCard.style.backgroundColor = warnaBg;
+
+            if (elValue)  elValue.textContent  = aqi;
+            if (elStatus) elStatus.textContent = 'AQI ' + aqi + ' • ' + pesan;
+            if (elFill)   elFill.style.width   = Math.min(100, (aqi / 300) * 100) + '%';
+            if (elLokasi) elLokasi.textContent = 'Banjarmasin, Kalimantan • Open-Meteo';
+          } catch (err) {
+            // ===== D) Fallback bila API gagal dipanggil =====
+            console.warn('⚠ Gagal mengambil AQI dari Open-Meteo:', err);
+            aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
+            aqiCard.style.backgroundColor = '';
+
+            if (elValue)  elValue.textContent  = '—';
+            if (elStatus) elStatus.textContent = 'Data AQI tidak tersedia saat ini.';
+            if (elFill)   elFill.style.width   = '0%';
+          }
+        }
 
     function tampilkanAQI(aqi, sumber) {
       const aqiCard  = $('#aqi-card');
