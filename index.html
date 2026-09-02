@@ -3,381 +3,206 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ruang Kelas Online • Belajar Dari Rumah</title>
+  <title>Ruang Kelas Online • LMS Sekolah</title>
 
-  <!-- FontAwesome CDN (ikon-ikon) -->
+  <!-- FontAwesome CDN (ikon) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-  <!-- Google Font (opsional, hanya untuk mempercantik) -->
+  <!-- Google Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
-
-    <!-- FASE 5: library Supabase TIDAK lagi dimuat di <head> (agar tidak pernah
-           menghalangi halaman). Ia dimuat DINAMIS & non-blocking oleh script.js
-           dengan fallback jsDelivr -> unpkg. -->
-  </head>
+</head>
 <body>
 
-  <!-- ================= HEADER (muncul hanya setelah masuk) ================= -->
-  <header id="app-header" class="hidden">
-    <div class="header-inner container">
-      <div class="brand">
-        <i class="fa-solid fa-graduation-cap brand-icon"></i>
-        <span>Ruang Kelas Online</span>
-      </div>
-      <button class="icon-btn" id="btn-logout" title="Keluar">
-        <i class="fa-solid fa-right-from-bracket"></i>
-      </button>
-    </div>
-  </header>
+  <!-- ═══════════════════════════════════════════════════════════
+       LAYAR 1 : GATEKEEPER / SISTEM LOGIN
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="screen-gatekeeper" class="gatekeeper">
+    <div class="gatekeeper-inner">
 
-  <main id="app-main">
-
-    <!-- ============ HALAMAN 1 : LANDING PAGE ============ -->
-    <section id="landing-page" class="page">
-      <div class="landing-hero">
+      <!-- Hero -->
+      <div class="gatekeeper-hero">
         <div class="logo-bubble">
-          <i class="fa-solid fa-chalkboard-user"></i>
+          <i class="fa-solid fa-graduation-cap"></i>
         </div>
         <h1>Ruang Kelas Online</h1>
-        <p class="subtitle">Belajar Dari Rumah jadi <b>seru</b> &amp; <b>terorganisir</b></p>
+        <p class="subtitle">LMS Sekolah • Belajar dari Rumah jadi seru &amp; terorganisir</p>
       </div>
 
-      <div class="role-cards">
-        <button class="role-card" id="btn-role-murid">
-          <i class="fa-solid fa-user-graduate icon"></i>
-          <h2>Masuk sebagai Murid</h2>
-          <p>Periksa checklist harian &amp; upload tugas</p>
-          <span class="go"><i class="fa-solid fa-arrow-right-long"></i></span>
-        </button>
+      <div class="gatekeeper-cards">
 
-        <button class="role-card alt" id="btn-role-guru">
-                  <i class="fa-solid fa-chalkboard-teacher icon"></i>
-                  <h2>Masuk sebagai Guru</h2>
-                  <p>Login dengan email &amp; password</p>
-                  <span class="go"><i class="fa-solid fa-arrow-right-long"></i></span>
-                  <span class="login-tag"><i class="fa-solid fa-lock"></i></span>
-                </button>
-      </div>
-
-      <p class="footer-note"><i class="fa-solid fa-flask"></i> Prototipe Fase 1 — semua data masih dummy</p>
-    </section>
-
-    <!-- ============ HALAMAN 2 : LOGIN GURU ============ -->
-    <section id="login-guru" class="page hidden">
-      <button class="back-btn" data-go="landing-page">
-        <i class="fa-solid fa-arrow-left"></i> Kembali
-      </button>
-
-      <div class="card login-card">
-        <div class="login-icon"><i class="fa-solid fa-chalkboard-teacher"></i></div>
-        <h2>Masuk Guru</h2>
-        <p class="muted">Gunakan akun yang diberikan pihak sekolah.</p>
-
-        <form id="form-login-guru" novalidate>
-          <div class="field">
-            <label for="email">Email</label>
-            <div class="input-wrap">
-              <i class="fa-solid fa-envelope"></i>
-              <input type="email" id="email" placeholder="guru@sekolah.com" autocomplete="off">
-            </div>
+        <!-- ─────────── KARTU A : LOGIN MURID ─────────── -->
+        <div class="login-card accent-siswa">
+          <div class="login-card-head">
+            <span class="login-icon"><i class="fa-solid fa-user-graduate"></i></span>
+            <h2>Masuk sebagai Murid</h2>
+            <p class="muted">Masukkan sandi kelas dari wali kelas, lalu pilih namamu.</p>
           </div>
 
-          <div class="field">
-            <label for="password">Password</label>
-            <div class="input-wrap">
-              <i class="fa-solid fa-lock"></i>
-              <input type="password" id="password" placeholder="••••••••" autocomplete="off">
-              <button type="button" class="toggle-pass" id="toggle-pass">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-            </div>
-          </div>
-
-          <div class="login-hint">
-            <i class="fa-solid fa-circle-info"></i>
-            Demo: email <b>guru@sekolah.com</b> &amp; password <b>123</b>
-          </div>
-
-          <p class="login-error hidden" id="login-error">
-            <i class="fa-solid fa-triangle-exclamation"></i> Email atau password salah!
-          </p>
-
-          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">
-                      Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                    </button>
-                  </form>
-                </div>
-              </section>
-
-              <!-- ============ HALAMAN 2B : LOGIN MURID (dropdown) ============ -->
-              <section id="login-murid" class="page hidden">
-                <button class="back-btn" data-go="landing-page">
-                  <i class="fa-solid fa-arrow-left"></i> Kembali
-                </button>
-
-                <div class="card login-card">
-                  <div class="login-icon"><i class="fa-solid fa-user-graduate"></i></div>
-                  <h2>Masuk Murid</h2>
-                  <p class="muted">Pilih namamu dari daftar, tanpa password 😊</p>
-
-                  <form id="form-login-murid" novalidate>
-                    <div class="field">
-                      <label for="select-murid">Nama Kamu</label>
-                      <div class="input-wrap">
-                        <i class="fa-solid fa-user"></i>
-                        <select id="select-murid" aria-label="Pilih nama murid">
-                          <option value="">— Pilih nama kamu —</option>
-                        </select>
-                        <i class="fa-solid fa-chevron-down"></i>
-                      </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary btn-block">
-                      Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                    </button>
-                  </form>
-                </div>
-              </section>
-
-              <!-- ============ HALAMAN 3 : DASHBOARD GURU (PILIH MODUL) ============ -->
-    <section id="dashboard-guru" class="page hidden">
-      <div class="page-head">
-        <h2>Selamat Datang, Ustadz Adam <span class="wave">👋</span></h2>
-        <p class="muted">Pilih modul yang ingin dikelola hari ini.</p>
-      </div>
-
-      <div class="module-grid">
-        <button class="module-card" data-go="dashboard-quran">
-          <i class="fa-solid fa-book-quran"></i>
-          <h3>Guru Al-Qur'an</h3>
-          <p>Buku nilai digital: Kelancaran, Hafalan, &amp; Wafa.</p>
-          <span class="go"><i class="fa-solid fa-arrow-right-long"></i></span>
-        </button>
-
-        <button class="module-card blue" data-go="dashboard-walikelas">
-          <i class="fa-solid fa-images"></i>
-          <h3>Wali Kelas</h3>
-          <p>Galeri foto tugas &amp; checklist harian siswa.</p>
-          <span class="go"><i class="fa-solid fa-arrow-right-long"></i></span>
-        </button>
-      </div>
-    </section>
-
-    <!-- ============ HALAMAN 4 : DASHBOARD MURID ============ -->
-    <section id="dashboard-murid" class="page hidden">
-          <div class="page-head">
-            <h2 id="sapaan-murid">Selamat datang! 👋</h2>
-            <p class="muted">Semangat belajar dari rumah hari ini!</p>
-                      </div>
-
-                      <!-- FASE 6 (BARU): Widget Kualitas Udara (AQI) -->
-                      <div class="card aqi-card" id="aqi-card">
-                        <div class="aqi-head">
-                          <span class="aqi-icon"><i class="fa-solid fa-wind"></i></span>
-                          <div>
-                            <h3>Kualitas Udara (AQI)</h3>
-                            <p class="muted" id="aqi-lokasi">Banjarmasin, Kalimantan</p>
-                          </div>
-                          <span class="aqi-value" id="aqi-value">—</span>
-                        </div>
-                        <p class="aqi-status" id="aqi-status">Mengambil data kualitas udara...</p>
-                        <div class="aqi-bar"><div class="aqi-fill" id="aqi-fill"></div></div>
-                      </div>
-
-                      <!-- Profil singkat -->
-          <div class="profile-card card">
-        <div class="avatar" id="murid-avatar"><i class="fa-solid fa-user-graduate"></i></div>
-        <div class="profile-info">
-          <h2 id="murid-nama">Murid</h2>
-          <p class="muted" id="murid-kelas">Kelas —</p>
-          <p class="muted" id="tanggal-today"></p>
-        </div>
-      </div>
-
-      <!-- Checklist Daily Tracker -->
-      <div class="card">
-        <div class="card-title">
-                  <h3><i class="fa-solid fa-list-check"></i> Checklist Harian</h3>
-                  <span class="badge" id="check-progress-text">0/9</span>
-                </div>
-
-                <div class="progress">
-                  <div class="progress-bar" id="check-progress-bar" style="width: 0%"></div>
-                </div>
-
-                <ul class="checklist" id="checklist-murid">
-                  <!-- diisi otomatis oleh script.js -->
-                </ul>
+          <!-- Langkah 1 : cek sandi kelas -->
+          <form id="form-cek-kelas" novalidate>
+            <div class="field">
+              <label for="sandi-kelas">Sandi Kelas</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-key"></i>
+                <input type="text" id="sandi-kelas" placeholder="contoh: kelas-1a" autocomplete="off">
               </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" id="btn-cek-kelas">
+              <i class="fa-solid fa-magnifying-glass"></i> Cek Kelas
+            </button>
+          </form>
 
-              <!-- FASE 3 (BARU): Upload Bukti Kegiatan Berfoto -->
-              <div class="card">
-                <div class="card-title">
-                  <h3><i class="fa-solid fa-camera"></i> Upload Bukti Kegiatan</h3>
-                </div>
+          <!-- Langkah 2 : pilih nama + masuk (disembunyikan di awal) -->
+          <div id="panel-pilih-murid" class="panel-murid hidden">
+            <div class="divider"><span>Kelas ditemukan!</span></div>
 
-                <div class="activity-row">
-                  <div class="activity-info">
-                    <span class="activity-icon"><i class="fa-solid fa-sun"></i></span>
-                    <div>
-                      <b>Sholat Dhuha</b>
-                      <p class="muted" id="status-sholat-dhuha">Belum diserahkan</p>
-                    </div>
-                  </div>
-                  <div class="activity-side">
-                    <img id="preview-sholat-dhuha" class="photo-preview hidden" alt="Pratinjau Sholat Dhuha">
-                    <button class="btn btn-small btn-outline btn-upload-foto" data-kegiatan="sholat-dhuha">
-                      <i class="fa-solid fa-camera"></i> Upload Foto
-                    </button>
-                    <input type="file" id="file-sholat-dhuha" class="file-foto hidden-file"
-                           data-kegiatan="sholat-dhuha" accept="image/*">
-                  </div>
-                </div>
-
-                <div class="activity-row">
-                  <div class="activity-info">
-                    <span class="activity-icon"><i class="fa-solid fa-hand-sparkles"></i></span>
-                    <div>
-                      <b>Life Skill</b>
-                      <p class="muted" id="status-life-skill">Belum diserahkan</p>
-                    </div>
-                  </div>
-                  <div class="activity-side">
-                    <img id="preview-life-skill" class="photo-preview hidden" alt="Pratinjau Life Skill">
-                    <button class="btn btn-small btn-outline btn-upload-foto" data-kegiatan="life-skill">
-                      <i class="fa-solid fa-camera"></i> Upload Foto
-                    </button>
-                    <input type="file" id="file-life-skill" class="file-foto hidden-file"
-                           data-kegiatan="life-skill" accept="image/*">
-                  </div>
-                                  </div>
-                                </div>
-
-                        <!-- FASE 6 (BARU): Setoran Hafalan Mandiri (Perekam Suara) -->
-                        <div class="card recorder-card">
-                          <div class="card-title">
-                            <h3><i class="fa-solid fa-microphone-lines"></i> Setoran Hafalan Mandiri</h3>
-                          </div>
-                          <p class="muted">Rekam hafalanmu lalu kirim ke ustadz/ustadzah. Pastikan suara jelas ya!</p>
-
-                          <div class="recorder-controls">
-                            <button class="btn btn-primary" id="btn-mulai-rekam">
-                              <i class="fa-solid fa-microphone"></i> Mulai Rekam 🎙️
-                            </button>
-                            <button class="btn btn-danger hidden" id="btn-berhenti-rekam">
-                              <i class="fa-solid fa-stop"></i> Berhenti Rekam 🛑
-                            </button>
-                            <span class="rec-timer muted" id="rec-timer">00:00</span>
-                          </div>
-
-                          <p class="rec-status muted" id="rec-status">Belum ada rekaman.</p>
-
-                          <div class="rec-preview hidden" id="rec-preview-wrap">
-                            <audio id="rec-preview-audio" controls></audio>
-                          </div>
-                        </div>
-
-                        <!-- Mini info tugas (dummy) -->
-      <div class="card task-info">
-        <h3><i class="fa-solid fa-file-circle-question"></i> Tugas Terbaru</h3>
-        <p><b>Matematika:</b> Pecahan sederhana (halaman 42–45).</p>
-        <p class="muted due"><i class="fa-regular fa-clock"></i> Tenggat: Jumat, 17.00 WIB</p>
-      </div>
-
-      <button class="btn btn-primary btn-block upload-btn" id="btn-upload-murid">
-        <i class="fa-solid fa-cloud-arrow-up"></i> Upload Tugas
-      </button>
-      <input type="file" id="file-tugas" class="hidden-file" accept="image/*,.pdf">
-    </section>
-
-    <!-- ============ HALAMAN 5 : DASHBOARD GURU AL-QUR'AN ============ -->
-    <section id="dashboard-quran" class="page hidden">
-      <div class="page-head">
-        <button class="back-btn" data-go="dashboard-guru">
-          <i class="fa-solid fa-arrow-left"></i>
-        </button>
-        <div class="head-title">
-          <h2><i class="fa-solid fa-book-quran"></i> Buku Nilai Al-Qur'an</h2>
-          <p class="muted">Kelas 4A • Guru Pengampu: Ustadz Adam</p>
-        </div>
-      </div>
-
-      <div class="card table-card">
-              <div class="table-scroll" id="wrap-tabel-nilai">
-                <!-- FASE 3 (BARU): tabel dirender dinamis oleh script.js (renderTabelNilai) -->
+            <div class="field">
+              <label for="select-murid">Pilih Namamu</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-user-graduate"></i>
+                <select id="select-murid" aria-label="Pilih nama murid">
+                  <option value="">— Pilih nama kamu —</option>
+                  <!-- daftar nama murid diisi oleh script.js dari tabel master_murid -->
+                </select>
+                <i class="fa-solid fa-chevron-down right"></i>
               </div>
             </div>
 
-      <div class="flex-btns">
-        <button class="btn btn-outline" id="btn-reset-nilai">
-          <i class="fa-solid fa-rotate-left"></i> Reset
-        </button>
-        <button class="btn btn-success" id="btn-simpan-semua">
-          <i class="fa-solid fa-floppy-disk"></i> Simpan Semua
-        </button>
-      </div>
-    </section>
+            <button type="button" class="btn btn-primary btn-block" id="btn-masuk-kelas">
+              <i class="fa-solid fa-right-to-bracket"></i> Masuk Kelas
+            </button>
 
-    <!-- ============ HALAMAN 6 : DASHBOARD WALI KELAS ============ -->
-    <section id="dashboard-walikelas" class="page hidden">
-      <div class="page-head">
-        <button class="back-btn" data-go="dashboard-guru">
-          <i class="fa-solid fa-arrow-left"></i>
-        </button>
-        <div class="head-title">
-          <h2><i class="fa-solid fa-images"></i> Wali Kelas</h2>
-          <p class="muted">Kelas 4A • Wali Kelas: Bapak Budi Santoso</p>
-        </div>
-      </div>
-
-      <!-- Tab: Galeri Tugas / Checklist Harian -->
-      <div class="tabs">
-        <button class="tab active" data-tab="gallery">
-          <i class="fa-solid fa-images"></i> Galeri Tugas
-        </button>
-        <button class="tab" data-tab="checklist">
-          <i class="fa-solid fa-list-check"></i> Checklist Harian
-        </button>
-      </div>
-
-      <!-- Panel: Galeri Tugas -->
-      <div id="panel-gallery" class="tab-panel">
-        <div class="gallery-grid" id="gallery-grid">
-          <!-- diisi otomatis oleh script.js -->
-        </div>
-      </div>
-
-      <!-- Panel: Checklist Harian -->
-      <div id="panel-checklist" class="tab-panel hidden">
-        <div class="card table-card">
-          <div class="table-scroll">
-            <table class="checklist-table">
-              <thead>
-                <tr>
-                  <th>Nama Murid</th>
-                  <th><i class="fa-solid fa-mosque" title="Shalat"></i></th>
-                  <th><i class="fa-solid fa-book-quran" title="Muroja'ah"></i></th>
-                  <th><i class="fa-solid fa-pen" title="Mengerjakan Tugas"></i></th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-checklist-wali">
-                <!-- diisi otomatis oleh script.js -->
-              </tbody>
-            </table>
+            <p id="pesan-murid" class="form-status hidden"></p>
           </div>
         </div>
-      </div>
-    </section>
 
-  </main>
+        <!-- ─────────── KARTU B : LOGIN PENDIDIK ─────────── -->
+        <div class="login-card accent-pendidik">
+          <div class="login-card-head">
+            <span class="login-icon"><i class="fa-solid fa-chalkboard-teacher"></i></span>
+            <h2>Masuk Pendidik</h2>
+            <p class="muted">Khusus guru &amp; staf sekolah.</p>
+          </div>
+
+          <form id="form-login-pendidik" novalidate>
+            <div class="field">
+              <label for="peran-pendidik">Pilih Peran</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-user-tie"></i>
+                <select id="peran-pendidik">
+                  <option value="">— Pilih peran —</option>
+                  <option value="walikelas">Wali Kelas</option>
+                  <option value="guru-mapel">Guru Mapel</option>
+                  <option value="guru-quran">Guru Qur'an</option>
+                  <option value="koordinator">Koordinator</option>
+                </select>
+                <i class="fa-solid fa-chevron-down right"></i>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="username-pendidik">Username</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-user"></i>
+                <input type="text" id="username-pendidik" placeholder="Nama pengguna" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password-pendidik">Password</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="password-pendidik" placeholder="••••••••" autocomplete="off">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="btn-masuk-dashboard">
+              <i class="fa-solid fa-arrow-right-to-bracket"></i> Masuk Dashboard
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       LAYAR 2 : DASHBOARD UTAMA (disembunyikan di awal)
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="screen-dashboard" class="dashboard hidden">
+
+    <!-- Header / Navbar -->
+    <header id="dashboard-header" class="dashboard-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <span class="brand-icon"><i class="fa-solid fa-graduation-cap"></i></span>
+          <span class="brand-text">Ruang Kelas Online</span>
+        </div>
+        <div class="header-user">
+          <span id="welcome-text" class="welcome-text">Halo!</span>
+          <button class="btn btn-danger btn-logout" id="btn-logout">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            <span class="logout-label">Keluar</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigasi 3 Tab -->
+    <nav class="tab-nav container" aria-label="Navigasi utama">
+      <button class="tab-btn active" data-tab="tab-quran">
+        <span class="tab-icon">🕌</span>
+        <span class="tab-label">Al-Qur'an</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-mapel">
+        <span class="tab-icon">📚</span>
+        <span class="tab-label">Mata Pelajaran</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-harian">
+        <span class="tab-icon">🏡</span>
+        <span class="tab-label">Harian &amp; Karakter</span>
+      </button>
+    </nav>
+
+    <!-- Konten Tab -->
+    <main class="container dashboard-main">
+
+      <!-- TAB 1 : AL-QUR'AN -->
+      <div id="tab-quran" class="tab-content active" role="tabpanel">
+        <div class="tab-content-head">
+          <h2><span class="tab-icon">🕌</span> Al-Qur'an</h2>
+          <p class="muted">Muroja'ah, setoran hafalan, dan aktivitas Al-Qur'an.</p>
+        </div>
+        <!-- konten dinamis akan diisi oleh script.js -->
+      </div>
+
+      <!-- TAB 2 : MATA PELAJARAN -->
+      <div id="tab-mapel" class="tab-content" role="tabpanel">
+        <div class="tab-content-head">
+          <h2><span class="tab-icon">📚</span> Mata Pelajaran</h2>
+          <p class="muted">Materi, tugas, dan kegiatan mata pelajaran.</p>
+        </div>
+      </div>
+
+      <!-- TAB 3 : HARIAN & KARAKTER -->
+      <div id="tab-harian" class="tab-content" role="tabpanel">
+        <div class="tab-content-head">
+          <h2><span class="tab-icon">🏡</span> Harian &amp; Karakter</h2>
+          <p class="muted">Checklist harian dan pembiasaan karakter.</p>
+        </div>
+      </div>
+
+    </main>
+  </section>
 
   <!-- Tempat notifikasi kecil (toast) -->
-    <div id="toast-area"></div>
+  <div id="toast-area" class="toast-area"></div>
 
+  <!-- Skrip utama (disesuaikan untuk struktur UI baru ini) -->
   <script src="script.js"></script>
 </body>
 </html>
