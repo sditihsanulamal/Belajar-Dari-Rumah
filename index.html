@@ -8,60 +8,74 @@
   <!-- FontAwesome CDN (ikon) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-  <!-- Google Font -->
+  <!-- Google Font : Quicksand (bulat, hangat) + Poppins (cadangan) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- ═══════════════════════════════════════════════════════════
-       LAYAR 1 : GATEKEEPER / SISTEM LOGIN
+       LAYAR 1 : GATEKEEPER / LOGIN (Glassmorphism + Toggle)
        ═══════════════════════════════════════════════════════════ -->
   <section id="screen-gatekeeper" class="gatekeeper">
-    <div class="gatekeeper-inner">
+    <!-- Blob dekoratif yang mengambang pelan -->
+    <div class="blob blob-1" aria-hidden="true"></div>
+    <div class="blob blob-2" aria-hidden="true"></div>
+    <div class="blob blob-3" aria-hidden="true"></div>
 
-      <!-- Hero -->
+    <div class="gatekeeper-inner">
       <div class="gatekeeper-hero">
-        <div class="logo-bubble">
-          <i class="fa-solid fa-graduation-cap"></i>
-        </div>
+        <div class="logo-bubble"><i class="fa-solid fa-graduation-cap"></i></div>
         <h1>Ruang Kelas Online</h1>
-        <p class="subtitle">LMS Sekolah • Belajar dari Rumah jadi seru &amp; terorganisir</p>
+        <p class="subtitle">Belajar dari Rumah jadi seru &amp; menyenangkan! 🌈</p>
       </div>
 
-      <div class="gatekeeper-cards">
+      <!-- SATU kartu utama : glassmorphism -->
+      <div class="glass-card">
 
-        <!-- ─────────── KARTU A : LOGIN MURID ─────────── -->
-        <div class="login-card accent-siswa">
-          <div class="login-card-head">
-            <span class="login-icon"><i class="fa-solid fa-user-graduate"></i></span>
-            <h2>Masuk sebagai Murid</h2>
-            <p class="muted">Masukkan sandi kelas dari wali kelas, lalu pilih namamu.</p>
-          </div>
+        <!-- Toggle pil melengkung : Murid <-> Pendidik -->
+        <div class="login-toggle" id="login-toggle" role="tablist" aria-label="Pilih jenis login">
+          <span class="toggle-indicator" id="toggle-indicator" aria-hidden="true"></span>
+          <button type="button" class="toggle-option active" data-role="murid" role="tab" aria-selected="true">
+            <span class="toggle-emoji">👨‍🎓</span> Saya Murid
+          </button>
+          <button type="button" class="toggle-option" data-role="pendidik" role="tab" aria-selected="false">
+            <span class="toggle-emoji">👨‍🏫</span> Saya Pendidik
+          </button>
+        </div>
+
+        <!-- ─────────── PANEL : MURID ─────────── -->
+        <div id="panel-murid" class="login-panel active" role="tabpanel">
 
           <!-- Langkah 1 : cek sandi kelas -->
           <form id="form-cek-kelas" novalidate>
+            <div class="panel-intro" data-role="murid">
+              <h2>Halo Teman! 👋</h2>
+              <p class="muted">Masukkan sandi kelas dari wali kelasmu, lalu pilih namamu.</p>
+            </div>
+
             <div class="field">
-              <label for="sandi-kelas">Sandi Kelas</label>
+              <label class="field-label" for="sandi-kelas">Sandi Kelas</label>
               <div class="input-wrap">
                 <i class="fa-solid fa-key"></i>
                 <input type="text" id="sandi-kelas" placeholder="contoh: kelas-1a" autocomplete="off">
               </div>
             </div>
-            <button type="submit" class="btn btn-primary btn-block" id="btn-cek-kelas">
+
+            <button type="submit" class="btn btn-primary btn-glow btn-block btn-murid" id="btn-cek-kelas">
               <i class="fa-solid fa-magnifying-glass"></i> Cek Kelas
             </button>
           </form>
 
           <!-- Langkah 2 : pilih nama + masuk (disembunyikan di awal) -->
           <div id="panel-pilih-murid" class="panel-murid hidden">
-            <div class="divider"><span>Kelas ditemukan!</span></div>
+            <div class="divider"><span>🎉 Kelas ditemukan!</span></div>
 
             <div class="field">
-              <label for="select-murid">Pilih Namamu</label>
+              <label class="field-label" for="select-murid">Pilih Namamu</label>
               <div class="input-wrap">
                 <i class="fa-solid fa-user-graduate"></i>
                 <select id="select-murid" aria-label="Pilih nama murid">
@@ -72,7 +86,7 @@
               </div>
             </div>
 
-            <button type="button" class="btn btn-primary btn-block" id="btn-masuk-kelas">
+            <button type="button" class="btn btn-primary btn-glow btn-block btn-murid" id="btn-masuk-kelas">
               <i class="fa-solid fa-right-to-bracket"></i> Masuk Kelas
             </button>
 
@@ -80,17 +94,16 @@
           </div>
         </div>
 
-        <!-- ─────────── KARTU B : LOGIN PENDIDIK ─────────── -->
-        <div class="login-card accent-pendidik">
-          <div class="login-card-head">
-            <span class="login-icon"><i class="fa-solid fa-chalkboard-teacher"></i></span>
-            <h2>Masuk Pendidik</h2>
-            <p class="muted">Khusus guru &amp; staf sekolah.</p>
-          </div>
-
+        <!-- ─────────── PANEL : PENDIDIK ─────────── -->
+        <div id="panel-pendidik" class="login-panel" role="tabpanel">
           <form id="form-login-pendidik" novalidate>
+            <div class="panel-intro" data-role="pendidik">
+              <h2>Selamat Datang 👋</h2>
+              <p class="muted">Silakan masuk menggunakan akun pendidik Anda.</p>
+            </div>
+
             <div class="field">
-              <label for="peran-pendidik">Pilih Peran</label>
+              <label class="field-label" for="peran-pendidik">Pilih Peran</label>
               <div class="input-wrap">
                 <i class="fa-solid fa-user-tie"></i>
                 <select id="peran-pendidik">
@@ -105,7 +118,7 @@
             </div>
 
             <div class="field">
-              <label for="username-pendidik">Username</label>
+              <label class="field-label" for="username-pendidik">Username</label>
               <div class="input-wrap">
                 <i class="fa-solid fa-user"></i>
                 <input type="text" id="username-pendidik" placeholder="Nama pengguna" autocomplete="off">
@@ -113,14 +126,14 @@
             </div>
 
             <div class="field">
-              <label for="password-pendidik">Password</label>
+              <label class="field-label" for="password-pendidik">Password</label>
               <div class="input-wrap">
                 <i class="fa-solid fa-lock"></i>
                 <input type="password" id="password-pendidik" placeholder="••••••••" autocomplete="off">
               </div>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block" id="btn-masuk-dashboard">
+            <button type="submit" class="btn btn-primary btn-glow btn-block btn-pendidik" id="btn-masuk-dashboard">
               <i class="fa-solid fa-arrow-right-to-bracket"></i> Masuk Dashboard
             </button>
           </form>
