@@ -467,6 +467,56 @@ input, select, textarea { font-family: inherit; }
 .btn-simpan-nilai { width: 100%; padding: 12px; font-size: .92rem; border-radius: 12px; }
 
 /* ═══════════════════════════════════════════════════════════
+   DASBOR MURID QUR'AN (perekam setoran)
+   ═══════════════════════════════════════════════════════════ */
+.murid-quran-tool { margin-top: 22px; display: grid; gap: 22px; }
+
+/* Info tautan GMeet */
+.gmeet-info {
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(160deg, #fff7ed, #fffbeb);
+  border: 1px dashed rgb(245 158 11 / .45);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+}
+.gmeet-info-icon {
+  width: 46px; height: 46px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  color: #fff; font-size: 1.2rem; border-radius: 14px;
+  box-shadow: 0 10px 20px -8px rgb(245 158 11 / .6);
+}
+.gmeet-info-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gmeet-info-text strong { font-size: .95rem; }
+.gmeet-info-text span { font-size: .82rem; color: var(--text-muted); font-weight: 500; }
+.gmeet-info-text a {
+  color: #0f766e; font-weight: 700; font-size: .88rem;
+  word-break: break-all; text-decoration: underline;
+}
+
+/* Tombol rekam */
+.rekam-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.rekam-preview { margin-bottom: 16px; }
+
+/* Indikator sedang merekam (tombol merah berdenyut) */
+.btn-mulai-merekam-aktif {
+  background: linear-gradient(135deg, #f87171, #dc2626) !important;
+  box-shadow: 0 14px 30px -12px rgb(220 38 38 / .6) !important;
+  animation: denyutRekam 1.2s ease-in-out infinite;
+}
+@keyframes denyutRekam {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
+/* Fokus hijau utk select mode rekaman */
+.murid-quran-tool .input-wrap select:focus {
+  background: #fff;
+  border-color: #10b981;
+  box-shadow: 0 0 0 5px rgb(16 185 129 / .16), 0 10px 24px -10px rgb(16 185 129 / .35);
+}
+
+/* ═══════════════════════════════════════════════════════════
    TOAST
    ═══════════════════════════════════════════════════════════ */
 .toast-area {

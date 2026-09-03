@@ -233,6 +233,59 @@
           </div>
 
         </div>
+
+        <!-- ─────────── KERANGKA KHUSUS MURID (tersembunyi default) ─────────── -->
+        <div id="perangkat-murid-quran" class="murid-quran-tool hidden">
+
+          <!-- Info : Tautan GMeet Wafa / Talaqqi (muncul jika ada) -->
+          <div id="info-gmeet-murid" class="gmeet-info hidden">
+            <div class="gmeet-info-icon"><i class="fa-solid fa-video"></i></div>
+            <div class="gmeet-info-text">
+              <strong>Tautan GMeet Wafa / Talaqqi</strong>
+              <span>Klik untuk bergabung dengan kelas daring:</span>
+              <a id="link-gmeet-murid" href="#" target="_blank" rel="noopener">meet.google.com/...</a>
+            </div>
+          </div>
+
+          <!-- Widget Perekam Setoran -->
+          <div class="quran-tool-card">
+            <h3><i class="fa-solid fa-microphone-lines"></i> Setoran Hafalan</h3>
+
+            <div class="field">
+              <label class="field-label" for="pilih-mode-rekam">Mode Rekaman</label>
+              <div class="input-wrap">
+                <i class="fa-solid fa-sliders"></i>
+                <select id="pilih-mode-rekam" aria-label="Pilih mode rekaman">
+                  <option value="audio">Suara (Audio)</option>
+                  <option value="video">Video</option>
+                </select>
+                <i class="fa-solid fa-chevron-down right"></i>
+              </div>
+            </div>
+
+            <div class="rekam-buttons">
+              <button type="button" class="btn btn-murid btn-glow" id="btn-mulai-rekam">
+                <i class="fa-solid fa-circle"></i> Mulai Rekam
+              </button>
+              <button type="button" class="btn btn-danger" id="btn-berhenti-rekam" disabled>
+                <i class="fa-solid fa-stop"></i> Berhenti
+              </button>
+            </div>
+
+            <!-- Preview hasil rekaman -->
+            <div class="rekam-preview">
+              <video id="preview-rekaman-video" class="setoran-media hidden" controls></video>
+              <audio id="preview-rekaman-audio" class="setoran-media hidden" controls></audio>
+              <p id="status-rekam" class="form-status hidden"></p>
+            </div>
+
+            <button type="button" class="btn btn-murid btn-glow btn-block" id="btn-kirim-setoran" disabled>
+              <i class="fa-solid fa-paper-plane"></i> Kirim Setoran ke Ustaz/Ustazah
+            </button>
+            <p id="status-kirim" class="form-status hidden"></p>
+          </div>
+
+        </div>
       </div>
 
       <!-- TAB 2 : MATA PELAJARAN -->

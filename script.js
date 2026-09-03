@@ -20,6 +20,11 @@ const SUPABASE_KEY = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
 let db = null;
 let dbGagal = false;   // bila true, lewati percobaan koneksi berikutnya
 
+/* ---------- Konfigurasi Cloudinary (isi dengan akun Anda) ---------- */
+const CLOUDINARY_CLOUD_NAME = 'woeufsww';     
+const CLOUDINARY_UPLOAD_PRESET = 'bdr_sdit'; 
+const CLOUDINARY_UPLOAD_PREFIX = 'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/';
+
 function muatScript(src) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('script');
@@ -442,6 +447,14 @@ function renderDashboard() {
     if (alatGuruQuran) alatGuruQuran.classList.add('hidden');
   }
 
+  // KERANGKA KHUSUS MURID — tampil hanya utk peran MURID
+  if (role === 'MURID') {
+    renderDasborMuridQuran();
+  } else {
+    const alatMuridQuran = $('#perangkat-murid-quran');
+    if (alatMuridQuran) alatMuridQuran.classList.add('hidden');
+  }
+
   const welcome = $('#welcome-text');
   if (welcome) {
     if (role === 'MURID') {
@@ -674,6 +687,213 @@ if (formTautanGMeet) {
     }
     toast('Tautan GMeet dipublikasikan!', 'fa-paper-plane');
   });
+}
+
+/* ============================================================
+   DASBOR KHUSUS MURID QUR'AN (PEREKAM SETORAN)
+   ============================================================ */
+
+// Tampilkan kerangka murid + muat tautan GMeet
+function renderDasborMuridQuran() {
+  const alat = $('#perangkat-murid-quran');
+  if (alat) alat.classList.remove('hidden');
+  muatTautanGMeet();
+}
+
+// Cari tautan GMeet Wafa (dari sessionStorage publikasi guru / tabel bila ada)
+async function muatTautanGMeet() {
+  const info = $('#info-gmeet-murid');
+  const link = $('#link-gmeet-murid');
+  if (!info || !link) return;
+
+  let tautan = sessionStorage.getItem('tautan_gmeet_quran') || '';
+
+  if (!tautan && (await tungguSupabase())) {
+    try {
+      const { data, error } = await db.from('tautan_gmeet').select('*').limit(1);
+      if (!error && Array.isArray(data) && data.length) {
+        tautan = data[0].url || data[0].tautan || data[0].link || '';
+      }
+    } catch (err) {
+      console.warn('⚠ tabel tautan_gmeet tidak terbaca:', err);
+    }
+  }
+
+  if (tautan) {
+    link.href = tautan;
+    link.textContent = tautan;
+    info.classList.remove('hidden');
+  } else {
+    info.classList.add('hidden');
+  }
+}
+
+/* ---------- Widget MediaRecorder (dipasang sekali saat halaman dimuat) ---------- */
+const btnMulaiRekam  = $('#btn-mulai-rekam');
+const btnHentikanRekam = $('#btn-berhenti-rekam');
+const btnKirimSetoran = $('#btn-kirim-setoran');
+const pilihModeRekam  = $('#pilih-mode-rekam');
+const previewAudio    = $('#preview-rekaman-audio');
+const previewVideo    = $('#preview-rekaman-video');
+const statusRekam     = $('#status-rekam');
+const statusKirim     = $('#status-kirim');
+
+let mediaRecorder   = null;
+let rekamanChunks   = [];
+let rekamanStream   = null;
+let blobSetoran     = null;
+
+if (btnMulaiRekam) {
+  btnMulaiRekam.addEventListener('click', async () => {
+    if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
+      alert('Browser ini tidak mendukung MediaRecorder. Gunakan Chrome/Edge terbaru.');
+      return;
+    }
+
+    const mode = pilihModeRekam ? pilihModeRekam.value : 'audio';
+
+    try {
+      rekamanStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: mode === 'video' ? { facingMode: 'user' } : false,
+      });
+    } catch (err) {
+      alert('Tidak bisa mengakses mikrofon/kamera: ' + err.message);
+      return;
+    }
+
+    // Reset hasil lama
+    rekamanChunks = [];
+    blobSetoran = null;
+    if (previewAudio) { previewAudio.pause(); previewAudio.src = ''; previewAudio.classList.add('hidden'); }
+    if (previewVideo) { previewVideo.pause(); previewVideo.src = ''; previewVideo.classList.add('hidden'); }
+    if (btnKirimSetoran) btnKirimSetoran.disabled = true;
+    if (statusKirim) statusKirim.classList.add('hidden');
+
+    mediaRecorder = new MediaRecorder(rekamanStream);
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size) rekamanChunks.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      // Hentikan semua track kamera/mikro
+      if (rekamanStream) {
+        rekamanStream.getTracks().forEach((t) => t.stop());
+        rekamanStream = null;
+      }
+      const mime = mediaRecorder.mimeType || (mode === 'video' ? 'video/webm' : 'audio/webm');
+      blobSetoran = new Blob(rekamanChunks, { type: mime });
+
+      const url = URL.createObjectURL(blobSetoran);
+      if (mode === 'video' && previewVideo) {
+        previewVideo.src = url;
+        previewVideo.classList.remove('hidden');
+        previewVideo.play().catch(function () {});
+      } else if (previewAudio) {
+        previewAudio.src = url;
+        previewAudio.classList.remove('hidden');
+      }
+      if (btnKirimSetoran) btnKirimSetoran.disabled = false;
+      if (statusRekam) {
+        statusRekam.textContent = 'Rekaman siap dikirim. 💾';
+        statusRekam.className = 'form-status ok';
+        statusRekam.classList.remove('hidden');
+      }
+    };
+
+    mediaRecorder.start();
+    btnMulaiRekam.disabled = true;
+    btnMulaiRekam.classList.add('btn-mulai-merekam-aktif');
+    btnMulaiRekam.innerHTML = '<i class="fa-solid fa-circle"></i> Merekam…';
+    if (btnHentikanRekam) btnHentikanRekam.disabled = false;
+    if (pilihModeRekam) pilihModeRekam.disabled = true;
+    if (statusRekam) {
+      statusRekam.textContent = 'Sedang merekam… 🎙️';
+      statusRekam.className = 'form-status ok';
+      statusRekam.classList.remove('hidden');
+    }
+  });
+
+  btnHentikanRekam.addEventListener('click', () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    btnMulaiRekam.disabled = false;
+    btnMulaiRekam.classList.remove('btn-mulai-merekam-aktif');
+    btnMulaiRekam.innerHTML = '<i class="fa-solid fa-circle"></i> Mulai Rekam';
+    if (btnHentikanRekam) btnHentikanRekam.disabled = true;
+    if (pilihModeRekam) pilihModeRekam.disabled = false;
+  });
+
+  btnKirimSetoran.addEventListener('click', async () => {
+    if (!blobSetoran) {
+      alert('Belum ada rekaman untuk dikirim. Rekam dulu ya!');
+      return;
+    }
+    const muridId = SESI.get('murid_id');
+    if (!muridId) {
+      alert('Sesi murid tidak ditemukan. Silakan login ulang.');
+      return;
+    }
+
+    const mode = pilihModeRekam ? pilihModeRekam.value : 'audio';
+    btnKirimSetoran.disabled = true;
+    btnKirimSetoran.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim…';
+    if (statusKirim) {
+      statusKirim.textContent = 'Mengunggah… mohon tunggu. ⏳';
+      statusKirim.className = 'form-status ok';
+      statusKirim.classList.remove('hidden');
+    }
+
+    try {
+      // 1) Unggah blob rekaman ke Cloudinary
+      const urlMedia = await unggahKeCloudinary(blobSetoran, mode);
+
+      // 2) Pastikan Supabase siap lalu INSERT ke tabel setoran_quran
+      if (!(await tungguSupabase())) throw new Error('Supabase tidak terhubung.');
+      const { error } = await db.from('setoran_quran').insert([
+        { murid_id: muridId, url_media: urlMedia },
+      ]);
+      if (error) throw error;
+
+      // 3) Bersihkan preview & beri konfirmasi
+      blobSetoran = null;
+      if (previewAudio) { previewAudio.pause(); previewAudio.src = ''; previewAudio.classList.add('hidden'); }
+      if (previewVideo) { previewVideo.pause(); previewVideo.src = ''; previewVideo.classList.add('hidden'); }
+      if (statusRekam) statusRekam.classList.add('hidden');
+      if (statusKirim) {
+        statusKirim.textContent = 'Setoran terkirim. Alhamdulillah! 🎉';
+        statusKirim.className = 'form-status ok';
+        statusKirim.classList.remove('hidden');
+      }
+      alert('Alhamdulillah, setoran berhasil dikirim!');
+      toast('Setoran berhasil dikirim! 🎉', 'fa-paper-plane');
+    } catch (err) {
+      console.warn('⚠ Gagal kirim setoran:', err);
+      if (statusKirim) {
+        statusKirim.textContent = 'Gagal mengirim: ' + err.message;
+        statusKirim.className = 'form-status err';
+        statusKirim.classList.remove('hidden');
+      }
+      alert('Gagal mengirim setoran: ' + err.message);
+    } finally {
+      btnKirimSetoran.disabled = false;
+      btnKirimSetoran.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Kirim Setoran ke Ustaz/Ustazah';
+    }
+  });
+}
+
+// Unggah blob ke Cloudinary via endpoint standar (unsigned upload preset)
+async function unggahKeCloudinary(blob, mode) {
+  const tipe = mode === 'video' ? 'video' : 'raw';   // audio -> raw, video -> video
+  const formData = new FormData();
+  formData.append('file', blob);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+  const res = await fetch(CLOUDINARY_UPLOAD_PREFIX + tipe + '/upload', {
+    method: 'POST',
+    body: formData,   // jangan set Content-Type manual (FormData otomatis)
+  });
+  if (!res.ok) throw new Error('Upload Cloudinary gagal (HTTP ' + res.status + ')');
+  const json = await res.json();
+  return json.secure_url || json.url;
 }
 
 /* ============================================================
