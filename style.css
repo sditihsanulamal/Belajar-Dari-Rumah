@@ -389,6 +389,84 @@ input, select, textarea { font-family: inherit; }
 .koordinator-panel { margin-top: 22px; }
 
 /* ═══════════════════════════════════════════════════════════
+   DASBOR GURU QUR'AN (setoran)
+   ═══════════════════════════════════════════════════════════ */
+.guru-quran-tool { margin-top: 22px; display: grid; gap: 22px; }
+
+.quran-tool-card {
+  background: linear-gradient(160deg, #ffffff, #f0fdfa);
+  border: 1px solid rgb(45 212 191 / .25);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 36px -18px rgb(15 23 42 / .3);
+  padding: 22px 20px;
+}
+
+.quran-tool-card h3,
+.quran-setoran h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 1.05rem; font-weight: 700; margin-bottom: 16px;
+}
+.quran-tool-card h3 i { color: #10b981; }
+
+/* Fokus hijau utk input tautan GMeet */
+.quran-tool-card .input-wrap input:focus {
+  background: #fff;
+  border-color: #10b981;
+  box-shadow: 0 0 0 5px rgb(16 185 129 / .16), 0 10px 24px -10px rgb(16 185 129 / .35);
+}
+
+/* Grid kartu setoran */
+.setoran-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
+}
+
+.setoran-card {
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 30px -16px rgb(15 23 42 / .3);
+  padding: 16px;
+  transition: transform .2s var(--ease-spring), box-shadow .2s ease;
+}
+.setoran-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px -16px rgb(15 23 42 / .4);
+}
+
+.setoran-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+}
+.setoran-nama { font-weight: 700; font-size: .98rem; }
+.setoran-tanggal {
+  font-size: .78rem; font-weight: 700; color: var(--text-muted);
+  background: #f1f5f9; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+
+.setoran-media {
+  width: 100%; border-radius: 12px; background: #f8fafc;
+}
+.setoran-tanpa-media {
+  text-align: center; padding: 18px 8px; font-size: .85rem;
+  background: #f8fafc; border-radius: 12px;
+}
+
+.setoran-nilai label { margin: 0 0 6px 4px; }
+.select-nilai {
+  width: 100%; padding: 11px 12px;
+  border: 1.5px solid #e2e8f0; border-radius: 12px;
+  background: #fff; font: inherit; font-weight: 600; color: var(--text);
+  outline: none; cursor: pointer;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.select-nilai:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / .15);
+}
+
+.btn-simpan-nilai { width: 100%; padding: 12px; font-size: .92rem; border-radius: 12px; }
+
+/* ═══════════════════════════════════════════════════════════
    TOAST
    ═══════════════════════════════════════════════════════════ */
 .toast-area {

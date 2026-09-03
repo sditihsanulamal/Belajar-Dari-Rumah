@@ -431,6 +431,17 @@ function renderDashboard() {
     pilihTab('tab-quran');
   }
 
+  // KERANGKA KHUSUS GURU QUR'AN — tampil hanya utk peran Guru Qur'an
+  const peranUpper = String(peran || '').toUpperCase().replace(/-/g, '_').replace(/\s+/g, '_');
+  const isGuruQuran = peranUpper === 'GURU_QURAN';
+
+  if (isGuruQuran) {
+    renderDasborGuruQuran();
+  } else {
+    const alatGuruQuran = $('#perangkat-guru-quran');
+    if (alatGuruQuran) alatGuruQuran.classList.add('hidden');
+  }
+
   const welcome = $('#welcome-text');
   if (welcome) {
     if (role === 'MURID') {
@@ -465,6 +476,205 @@ function pilihTab(id) {
 $$('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => pilihTab(btn.dataset.tab));
 });
+
+/* ============================================================
+   DASBOR KHUSUS GURU QUR'AN (di dalam Tab Al-Qur'an)
+   ============================================================ */
+const NILAI_QURAN = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D'];
+
+function escapeHtml(teks) {
+  return String(teks || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatTanggal(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Peta id murid -> nama (dari master_murid)
+async function petaNamaMurid() {
+  const peta = {};
+  if (!(await tungguSupabase())) return peta;
+  try {
+    const { data, error } = await db.from('master_murid').select('id, nama, nama_murid');
+    if (!error && Array.isArray(data)) {
+      data.forEach(function (m) {
+        if (m.id !== undefined && m.id !== null) {
+          peta[String(m.id)] = m.nama || m.nama_murid || '';
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('⚠ master_murid (nama) tidak terbaca:', err);
+  }
+  return peta;
+}
+
+// Buat satu kartu setoran
+function buatKartuSetoran(setoran, petaNama) {
+  const idSetoran = setoran.id || setoran.setoran_id;
+  const mediaUrl  = setoran.media_url || setoran.url_media || setoran.link_media || setoran.link || '';
+  const tgl       = setoran.tanggal || setoran.tanggal_setoran || setoran.created_at;
+
+  const namaMurid =
+    (setoran.murid_id ? petaNama[String(setoran.murid_id)] : '') ||
+    setoran.nama_murid ||
+    'Murid #' + (setoran.murid_id || '?');
+
+  const kartu = document.createElement('div');
+  kartu.className = 'setoran-card';
+
+  // 1) Kepala kartu : nama murid & tanggal
+  const kepala = document.createElement('div');
+  kepala.className = 'setoran-card-head';
+  kepala.innerHTML =
+    '<span class="setoran-nama">' + escapeHtml(namaMurid) + '</span>' +
+    '<span class="setoran-tanggal">' + escapeHtml(formatTanggal(tgl)) + '</span>';
+  kartu.appendChild(kepala);
+
+  // 2) Pemutar media (audio/video) sesuai jenis URL
+  if (mediaUrl) {
+    const isVideo = /\.(mp4|webm|ogg|mov)(\?|#|$)/i.test(mediaUrl);
+    const media = document.createElement(isVideo ? 'video' : 'audio');
+    media.className = 'setoran-media';
+    media.controls = true;
+    media.preload = 'metadata';
+    media.src = mediaUrl;
+    kartu.appendChild(media);
+  } else {
+    const kosong = document.createElement('p');
+    kosong.className = 'muted setoran-tanpa-media';
+    kosong.textContent = '(tidak ada media setoran)';
+    kartu.appendChild(kosong);
+  }
+
+  // 3) Dropdown penilaian ketat
+  const nilaiWrap = document.createElement('div');
+  nilaiWrap.className = 'setoran-nilai';
+  const lbl = document.createElement('label');
+  lbl.className = 'field-label';
+  lbl.textContent = 'Penilaian';
+  const select = document.createElement('select');
+  select.className = 'select-nilai';
+  select.appendChild(new Option('— Pilih nilai —', ''));
+  NILAI_QURAN.forEach(function (n) {
+    const op = new Option(n, n);
+    if (setoran.nilai_huruf && String(setoran.nilai_huruf) === String(n)) op.selected = true;
+    select.appendChild(op);
+  });
+  nilaiWrap.appendChild(lbl);
+  nilaiWrap.appendChild(select);
+  kartu.appendChild(nilaiWrap);
+
+  // 4) Tombol Simpan Nilai -> UPDATE tabel setoran_quran
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-murid btn-glow btn-simpan-nilai';
+  btn.innerHTML = '<i class="fa-solid fa-check"></i> Simpan Nilai';
+  btn.addEventListener('click', async function () {
+    const nilai = select.value;
+    if (!nilai) {
+      alert('Silakan pilih nilai terlebih dahulu.');
+      return;
+    }
+    const { error } = await db
+      .from('setoran_quran')
+      .update({ nilai_huruf: nilai })
+      .eq('id', idSetoran);
+    if (error) {
+      console.warn('⚠ Gagal menyimpan nilai:', error);
+      alert('Gagal menyimpan nilai. Coba lagi.');
+      return;
+    }
+    alert('Nilai berhasil disimpan!');
+    toast('Nilai ' + escapeHtml(namaMurid) + ' disimpan: ' + nilai, 'fa-check');
+  });
+  kartu.appendChild(btn);
+
+  return kartu;
+}
+
+// Fungsi utama: tampilkan kerangka & render kartu setoran
+async function renderDasborGuruQuran() {
+  const alat = $('#perangkat-guru-quran');
+  if (alat) alat.classList.remove('hidden');
+
+  const list = $('#list-setoran-quran');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (!(await tungguSupabase())) {
+    list.innerHTML = '<p class="form-status err">Database setoran_quran tidak terhubung.</p>';
+    return;
+  }
+
+  // Ambil data setoran (coba join nama murid; fallback peta manual)
+  let data = [];
+  try {
+    const { data: baris, error } = await db.from('setoran_quran').select('*, master_murid(nama)');
+    if (!error && Array.isArray(baris) && baris.length) {
+      data = baris;
+    } else {
+      const ulang = await db.from('setoran_quran').select('*');
+      data = (ulang.error || !Array.isArray(ulang.data)) ? [] : ulang.data;
+    }
+  } catch (err) {
+    console.warn('⚠ setoran_quran tidak terbaca:', err);
+  }
+
+  if (!data.length) {
+    list.innerHTML = '<p class="muted">Belum ada setoran hari ini. 🎧</p>';
+    return;
+  }
+
+  const petaNama = await petaNamaMurid();
+
+  data.forEach(function (setoran) {
+    // Bila join berhasil, ambil nama dari hasil join
+    if (!setoran.nama_murid && setoran.master_murid && setoran.master_murid.nama) {
+      setoran.nama_murid = setoran.master_murid.nama;
+    }
+    list.appendChild(buatKartuSetoran(setoran, petaNama));
+  });
+}
+
+/* ============================================================
+   FORM TAUTAN GMEET WAFA / TALAQQI
+   ============================================================ */
+const formTautanGMeet = $('#form-tautan-gmeet');
+if (formTautanGMeet) {
+  formTautanGMeet.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const input  = $('#tautan-gmeet');
+    const status = $('#status-tautan');
+    const tautan = (input ? input.value : '').trim();
+
+    if (!tautan) {
+      if (status) {
+        status.textContent = 'Masukkan tautan GMeet terlebih dahulu.';
+        status.className = 'form-status err';
+        status.classList.remove('hidden');
+      }
+      return;
+    }
+
+    // Sementara: simpan & tampilkan; siap dihubungkan ke kolom tabel kapan pun.
+    sessionStorage.setItem('tautan_gmeet_quran', tautan);
+    if (status) {
+      status.textContent = 'Tautan GMeet berhasil dipublikasikan!';
+      status.className = 'form-status ok';
+      status.classList.remove('hidden');
+    }
+    toast('Tautan GMeet dipublikasikan!', 'fa-paper-plane');
+  });
+}
 
 /* ============================================================
    LOGOUT

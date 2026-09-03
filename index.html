@@ -197,12 +197,42 @@
     <main class="container dashboard-main">
 
       <!-- TAB 1 : AL-QUR'AN -->
-      <div id="tab-quran" class="tab-content active" role="tabpanel">
+      <div id="tab-quran" class="tab-content" role="tabpanel">
         <div class="tab-content-head">
           <h2><span class="tab-icon">🕌</span> Al-Qur'an</h2>
           <p class="muted">Muroja'ah, setoran hafalan, dan aktivitas Al-Qur'an.</p>
         </div>
-        <!-- konten dinamis akan diisi oleh script.js -->
+
+        <!-- ─────────── KERANGKA KHUSUS GURU QUR'AN (tersembunyi default) ─────────── -->
+        <div id="perangkat-guru-quran" class="guru-quran-tool hidden">
+
+          <!-- Bagian Atas : Form tautan GMeet Wafa/Talaqqi -->
+          <div class="quran-tool-card">
+            <h3><i class="fa-solid fa-video"></i> Tautan GMeet Wafa / Talaqqi</h3>
+            <form id="form-tautan-gmeet" novalidate>
+              <div class="field" style="margin-bottom: 14px;">
+                <label class="field-label" for="tautan-gmeet">Tautan GMeet</label>
+                <div class="input-wrap">
+                  <i class="fa-solid fa-link"></i>
+                  <input type="text" id="tautan-gmeet" placeholder="https://meet.google.com/..." autocomplete="off">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-murid btn-glow btn-block" id="btn-publikasikan-tautan">
+                <i class="fa-solid fa-paper-plane"></i> Publikasikan Tautan
+              </button>
+            </form>
+            <p id="status-tautan" class="form-status hidden"></p>
+          </div>
+
+          <!-- Bagian Bawah : Daftar kartu setoran murid -->
+          <div class="quran-setoran">
+            <h3><i class="fa-solid fa-scroll"></i> Daftar Setoran Murid</h3>
+            <div id="list-setoran-quran" class="setoran-grid">
+              <!-- kartu setoran di-render oleh renderDasborGuruQuran() -->
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <!-- TAB 2 : MATA PELAJARAN -->
