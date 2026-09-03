@@ -1,19 +1,21 @@
 /* ============================================================
    RUANG KELAS ONLINE — script.js
-   UI BARU : Gatekeeper (toggle Murid/Pendidik) + Dashboard Tab
+   AUTENTIKASI & ROLE-BASED ROUTING
    ------------------------------------------------------------
-   Alur login:
-   - Murid    : Cek Sandi Kelas -> pilih nama -> Masuk Kelas
-   - Pendidik : peran + username + password -> Masuk Dashboard
-   Data memakai SUPABASE (tabel relasional: master_kelas,
-   master_murid, master_pendidik) bila tersedia, dan otomatis
-   FALLBACK ke data demo lokal agar aplikasi selalu bisa dipakai.
+   Tabel Supabase (relasional):
+   - master_kelas : id, kode, sandi_kelas, nama
+   - master_murid : id, nama / nama_murid, kelas_id
+   - master_guru  : id, nama / nama_guru, username, password,
+                    peran (walikelas | guru-mapel | guru-quran | koordinator),
+                    kelas_id (opsional, utk wali kelas)
+
+   Sesi disimpan di sessionStorage (otomatis terhapus saat tab ditutup).
    ============================================================ */
 
-/* ---------- Konfigurasi Supabase (lazy & non-blocking) ---------- */
+/* ---------- Konfigurasi Supabase ---------- */
 const SUPABASE_URL = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
-let db = null;   // client `db` (dipakai lazy oleh inisialisasiDb)
+let db = null;
 
 function muatScript(src) {
   return new Promise((resolve, reject) => {
@@ -44,9 +46,14 @@ async function inisialisasiDb() {
   }
 }
 
-async function tungguSupabase(ms = 6000) {
+// Beri kesempatan CDN load; kembalikan true bila db siap.
+async function tungguSupabase(ms) {
   if (db) return true;
-  await Promise.race([inisialisasiDb(), new Promise((r) => setTimeout(r, ms))]);
+  const timeout = ms || 6000;
+  await Promise.race([
+    inisialisasiDb(),
+    new Promise(function (r) { setTimeout(r, timeout); }),
+  ]);
   return !!db;
 }
 
@@ -54,76 +61,43 @@ async function tungguSupabase(ms = 6000) {
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-function toast(msg, icon = 'fa-circle-check') {
+function toast(msg, icon) {
   const area = $('#toast-area');
   if (!area) return;
   const t = document.createElement('div');
   t.className = 'toast';
-  t.innerHTML = `<i class="fa-solid ${icon}"></i> ${msg}`;
+  t.innerHTML = '<i class="fa-solid ' + (icon || 'fa-circle-check') + '"></i> ' + msg;
   area.appendChild(t);
-  requestAnimationFrame(() => t.classList.add('show'));
-  setTimeout(() => {
+  requestAnimationFrame(function () { t.classList.add('show'); });
+  setTimeout(function () {
     t.classList.remove('show');
-    setTimeout(() => t.remove(), 350);
+    setTimeout(function () { t.remove(); }, 350);
   }, 2600);
 }
 
-// Tampilkan pesan status pada elemen form (tipe: ok | err)
 function tampilkanStatus(el, teks, tipe) {
   if (!el) return;
   el.textContent = teks;
   el.className = 'form-status ' + (tipe || '');
 }
 
-/* ============================================================
-   DATA DEMO / FALLBACK
-   (dipakai kalau database belum terisi atau tidak bisa diakses)
-   ============================================================ */
-const KELAS_DEMO = [
-  { kode: 'kelas-1a', nama: 'Kelas 1A', sandi: 'kelas-1a' },
-  { kode: 'kelas-4a', nama: 'Kelas 4A', sandi: 'kelas-4a' },
-];
-
-const MURID_DEMO = {
-  'kelas-1a': ['Ahmad', 'Budi', 'Siti', 'Zahra'],
-  'kelas-4a': ['Dewi', 'Fajar', 'Hana', 'Raka'],
+/* ---------- Sesi: sessionStorage ---------- */
+const SESI = {
+  set: function (k, v) {
+    if (v !== null && v !== undefined) sessionStorage.setItem(k, String(v));
+  },
+  get: function (k) { return sessionStorage.getItem(k); },
+  clear: function () { sessionStorage.clear(); },
 };
 
-// Peran & akun pendidik demo. PENTING: semua password = 123
-const PERAN_PENDIDIK = [
-  { peran: 'walikelas',   label: 'Wali Kelas' },
-  { peran: 'guru-mapel',  label: 'Guru Mapel' },
-  { peran: 'guru-quran',  label: "Guru Qur'an" },
-  { peran: 'koordinator', label: 'Koordinator' },
-];
-
-const PENDIDIK_DEMO = [
-  { peran: 'walikelas',   username: 'walikelas',   password: '123', nama: 'Pak Budi' },
-  { peran: 'guru-mapel',  username: 'gurumapel',   password: '123', nama: 'Bu Siti' },
-  { peran: 'guru-quran',  username: 'guruquran',   password: '123', nama: 'Ust. Ahmad' },
-  { peran: 'koordinator', username: 'koordinator', password: '123', nama: 'Pak Hasan' },
-];
-
 function labelPeran(peran) {
-  const p = PERAN_PENDIDIK.find((x) => x.peran === peran);
-  return p ? p.label : peran;
-}
-
-/* ============================================================
-   STATE APLIKASI & SESI
-   ============================================================ */
-let sesiAktif = null;   // { rol: 'murid'|'pendidik', ... }
-
-const SESI_KEY = 'rukob_session';
-
-function simpanSesi(rincian) {
-  localStorage.setItem(SESI_KEY, JSON.stringify(rincian));
-  sesiAktif = rincian;
-}
-
-function hapusSesi() {
-  localStorage.removeItem(SESI_KEY);
-  sesiAktif = null;
+  const map = {
+    walikelas: 'Wali Kelas',
+    'guru-mapel': 'Guru Mapel',
+    'guru-quran': "Guru Qur'an",
+    koordinator: 'Koordinator',
+  };
+  return map[peran] || peran || 'Pendidik';
 }
 
 /* ============================================================
@@ -138,206 +112,196 @@ if (loginToggle) {
     const opt = e.target.closest('.toggle-option');
     if (!opt || opt.classList.contains('active')) return;
 
-    // Ganti status aktif tombol + aria
     loginToggle.querySelectorAll('.toggle-option').forEach((o) => {
       o.classList.toggle('active', o === opt);
       o.setAttribute('aria-selected', o === opt ? 'true' : 'false');
     });
 
-    // Geser indikator & tukar panel (fade-in)
     const kePendidik = opt.dataset.role === 'pendidik';
     loginToggle.classList.toggle('pendidik', kePendidik);
     panelMurid.classList.toggle('active', !kePendidik);
     panelPendidik.classList.toggle('active', kePendidik);
 
-    // Bersihkan status error lama supaya tidak membingungkan
     const ps = $('#pesan-murid');
     if (ps) ps.classList.add('hidden');
   });
 }
 
 /* ============================================================
-   LANGKAH 1 MURID : CEK SANDI KELAS
+   MURID — LANGKAH 1 : CEK SANDI KELAS
+   Cari master_kelas berdasarkan sandi kelas -> simpan kelas sementara.
    ============================================================ */
-async function cariKelas(sandi) {
+let sesiSementaraKelas = null;   // menyimpan objek kelas hasil "Cek Kelas"
+
+async function cariKelasBySandi(sandi) {
   const s = String(sandi || '').trim().toLowerCase();
+  if (!(await tungguSupabase())) return null;
 
-  // 1) Coba database relasional (master_kelas) bila tersedia
-  if (await tungguSupabase()) {
-    try {
-      const { data, error } = await db.from('master_kelas').select('*');
-      if (!error && Array.isArray(data) && data.length) {
-        const ketemu = data.find((k) =>
-          String(k.sandi_kelas || k.sandi || k.kode || '').toLowerCase() === s ||
-          String(k.kode || '').toLowerCase() === s
-        );
-        if (ketemu) {
-          return {
-            kode: ketemu.kode || ketemu.id || s,
-            nama: ketemu.nama || 'Kelas',
-            sandi: s,
-            dariDb: true,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('⚠ master_kelas tidak terbaca, pakai demo:', err);
-    }
+  try {
+    const { data, error } = await db
+      .from('master_kelas')
+      .select('*')
+      .or('sandi_kelas.eq.' + s + ',kode.eq.' + s + ',sandi.eq.' + s);
+    if (error) throw error;
+    if (Array.isArray(data) && data.length) return data[0];
+  } catch (err) {
+    console.warn('⚠ master_kelas tidak terbaca:', err);
   }
-
-  // 2) Fallback data demo
-  return KELAS_DEMO.find((k) => k.sandi === s || k.kode === s) || null;
+  return null;
 }
 
 const formCekKelas = $('#form-cek-kelas');
 if (formCekKelas) {
   formCekKelas.addEventListener('submit', async (e) => {
     e.preventDefault();
+
     const input = $('#sandi-kelas');
     const pesan = $('#pesan-murid');
     const sandi = (input ? input.value : '').trim();
 
     if (!sandi) {
+      alert('Silakan ketik Sandi Kelas terlebih dahulu.');
       tampilkanStatus(pesan, 'Ketik sandi kelas dulu ya!', 'err');
-      pesan.classList.remove('hidden');
       return;
     }
 
     const btn = $('#btn-cek-kelas');
-    if (btn) btn.disabled = true;
+    if (btn) btn.disabled = true;                 // mencegah klik ganda
 
-    const kelas = await cariKelas(sandi);
+    const kelas = await cariKelasBySandi(sandi);
 
     if (btn) btn.disabled = false;
 
+    // EROR: sandi salah / tidak ditemukan
     if (!kelas) {
-      tampilkanStatus(pesan, 'Sandi kelas tidak ditemukan. Coba "kelas-1a" ya!', 'err');
-      pesan.classList.remove('hidden');
+      tampilkanStatus(pesan, 'Sandi kelas tidak ditemukan.', 'err');
+      alert('Sandi kelas salah / tidak ditemukan. Silakan periksa kembali!');
       return;
     }
 
-    // Simpan kelas yang ditemukan utk langkah berikutnya
-    sesiAktif = { rol: 'murid', kelas: kelas };
+    // Simpan kelas hasil pencarian utk langkah berikutnya
+    sesiSementaraKelas = kelas;
 
-    // Isi dropdown nama murid untuk kelas tsb
-    await isiDaftarNamaMurid(kelas);
-    $('#select-murid').selectedIndex = 0;
+    // Ambil daftar murid di kelas tsb lalu isi dropdown
+    const daftarMurid = await ambilMuridByKelasId(kelas.id || kelas.kelas_id);
+    isiDropdownMurid(daftarMurid);
 
-    // Tampilkan panel pilih nama
-    $('#panel-pilih-murid').classList.remove('hidden');
+    // Tampilkan panel "pilih nama + Masuk Kelas"
+    const panelPilih = $('#panel-pilih-murid');
+    if (panelPilih) panelPilih.classList.remove('hidden');
     tampilkanStatus(pesan, '', 'ok');
     pesan.classList.add('hidden');
 
-    toast(`Kelas ditemukan: ${kelas.nama} 🎉`, 'fa-circle-check');
+    toast('Kelas ditemukan: ' + (kelas.nama || 'Kelas') + ' 🎉', 'fa-circle-check');
   });
 }
 
 /* ============================================================
-   ISI DROPDOWN NAMA MURID (dari master_murid / demo)
+   MURID — AMBIL & ISI DROPDOWN NAMA MURID
    ============================================================ */
-async function isiDaftarNamaMurid(kelas) {
+async function ambilMuridByKelasId(kelasId) {
+  if (!kelasId) return [];
+  try {
+    const { data, error } = await db
+      .from('master_murid')
+      .select('*')
+      .eq('kelas_id', kelasId);
+    if (error) throw error;
+
+    if (Array.isArray(data) && data.length) {
+      return data
+        .map((m) => ({
+          murid_id: m.id || m.murid_id,
+          nama: m.nama || m.nama_murid || '',
+        }))
+        .filter((x) => x.murid_id !== undefined && x.nama);
+    }
+  } catch (err) {
+    console.warn('⚠ master_murid tidak terbaca:', err);
+  }
+  return [];
+}
+
+function isiDropdownMurid(daftar) {
   const select = $('#select-murid');
   if (!select) return;
   select.innerHTML = '<option value="">— Pilih nama kamu —</option>';
 
-  let daftar = [];
-
-  // Coba database relasional (master_murid) bila tersedia
-  if (await tungguSupabase()) {
-    try {
-      const kolomKelas = ['kelas_id', 'kelas_kode', 'kode_kelas', 'nama_kelas_id'];
-      const { data, error } = await db.from('master_murid').select('*');
-      if (!error && Array.isArray(data) && data.length) {
-        daftar = data
-          .filter((m) => {
-            const val = kolomKelas.map((k) => String(m[k] || '')).join('|');
-            return val.toLowerCase().includes(kelas.kode.toLowerCase()) ||
-                   String(m.kelas || '').toLowerCase() === kelas.nama.toLowerCase();
-          })
-          .map((m) => m.nama || m.nama_murid || '');
-        daftar = daftar.filter(Boolean);
-      }
-    } catch (err) {
-      console.warn('⚠ master_murid tidak terbaca, pakai demo:', err);
-    }
-  }
-
-  // Fallback demo
-  if (!daftar.length) {
-    daftar = MURID_DEMO[kelas.kode] || MURID_DEMO[kelas.sandi] || [];
-  }
-
-  daftar.forEach((nama) => {
+  daftar.forEach((m) => {
     const opt = document.createElement('option');
-    opt.value = nama;
-    opt.textContent = nama;
+    opt.value = m.murid_id;      // simpan murid_id sebagai value
+    opt.textContent = m.nama;    // tampilkan nama
     select.appendChild(opt);
   });
 }
 
 /* ============================================================
-   LANGKAH 2 MURID : MASUK KELAS
+   MURID — LANGKAH 2 : MASUK KELAS
+   Simpan nama_murid, murid_id, kelas_id, role='MURID' -> renderDashboard()
    ============================================================ */
 const btnMasukKelas = $('#btn-masuk-kelas');
 if (btnMasukKelas) {
   btnMasukKelas.addEventListener('click', () => {
-    const nama = $('#select-murid').value;
-    const pesan = $('#pesan-murid');
+    const select = $('#select-murid');
+    const pesan  = $('#pesan-murid');
+    const murid_id = select ? select.value : '';
 
-    if (!nama) {
+    if (!murid_id) {
       tampilkanStatus(pesan, 'Pilih namamu dulu ya!', 'err');
-      pesan.classList.remove('hidden');
+      alert('Pilih nama murid terlebih dahulu sebelum masuk kelas.');
       return;
     }
 
-    if (!(sesiAktif && sesiAktif.kelas)) {
+    if (!sesiSementaraKelas) {
       tampilkanStatus(pesan, 'Silakan cek sandi kelas dulu.', 'err');
-      pesan.classList.remove('hidden');
+      alert('Silakan lakukan "Cek Kelas" terlebih dahulu.');
       return;
     }
 
-    // Simpan sesi & buka dashboard
-    const kelas = sesiAktif.kelas;
-    simpanSesi({ rol: 'murid', nama, kelasKode: kelas.kode, kelasNama: kelas.nama });
-    bukaDashboard();
+    const nama_murid = select.options[select.selectedIndex]
+      ? select.options[select.selectedIndex].textContent.trim()
+      : '';
+
+    // Simpan sesi murid ke sessionStorage (sesuai spesifikasi)
+    SESI.set('role', 'MURID');
+    SESI.set('nama_murid', nama_murid);
+    SESI.set('murid_id', murid_id);
+    SESI.set('kelas_id', sesiSementaraKelas.id || sesiSementaraKelas.kelas_id);
+    SESI.set('nama_kelas', sesiSementaraKelas.nama || 'Kelas');
+
+    renderDashboard();
   });
 }
 
 /* ============================================================
-   LOGIN PENDIDIK
+   PENDIDIK — LOGIN TIM KELAS & KOORDINATOR
+   Cek master_guru dengan .eq(username).eq(password),
+   lalu pastikan peran dari dropdown cocok dengan akun.
    ============================================================ */
-async function cariPendidik(peran, username, password) {
-  const u = String(username || '').trim().toLowerCase();
+async function cariGuru(peran, username, password) {
+  const u = String(username || '').trim();
   const p = String(password || '');
+  if (!(await tungguSupabase())) return null;
 
-  // 1) Coba database relasional (master_pendidik) bila tersedia
-  if (await tungguSupabase()) {
-    try {
-      const { data, error } = await db.from('master_pendidik').select('*');
-      if (!error && Array.isArray(data) && data.length) {
-        const ketemu = data.find((x) =>
-          String(x.peran || '').toLowerCase() === peran &&
-          String(x.username || '').toLowerCase() === u &&
-          String(x.password || '') === p
-        );
-        if (ketemu) {
-          return {
-            peran,
-            username: ketemu.username || u,
-            nama: ketemu.nama || ketemu.nama_pendidik || u,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('⚠ master_pendidik tidak terbaca, pakai demo:', err);
+  try {
+    const { data, error } = await db
+      .from('master_guru')
+      .select('*')
+      .eq('username', u)
+      .eq('password', p);
+    if (error) throw error;
+
+    if (Array.isArray(data) && data.length) {
+      // Pastikan peran yang dipilih cocok dengan baris akun
+      const cocok = data.find(function (g) {
+        return String(g.peran || '').toLowerCase() === String(peran || '').toLowerCase();
+      });
+      if (cocok) return cocok;
     }
+  } catch (err) {
+    console.warn('⚠ master_guru tidak terbaca:', err);
   }
-
-  // 2) Fallback data demo
-  const akun = PENDIDIK_DEMO.find(
-    (x) => x.peran === peran && x.username.toLowerCase() === u && x.password === p
-  );
-  return akun || null;
+  return null;
 }
 
 const formLoginPendidik = $('#form-login-pendidik');
@@ -348,54 +312,88 @@ if (formLoginPendidik) {
     const peran    = $('#peran-pendidik').value;
     const username = $('#username-pendidik').value.trim();
     const password = $('#password-pendidik').value;
-    const btn      = $('#btn-masuk-dashboard');
 
-    if (!peran)  { toast('Pilih peranmu dulu ya!', 'fa-triangle-exclamation'); return; }
-    if (!username || !password) { toast('Username & password wajib diisi!', 'fa-triangle-exclamation'); return; }
-
-    if (btn) btn.disabled = true;
-    const akun = await cariPendidik(peran, username, password);
-    if (btn) btn.disabled = false;
-
-    if (!akun) {
-      toast('Peran / username / password salah. Coba akun demo di bawah!', 'fa-triangle-exclamation');
+    if (!peran)   { alert('Silakan pilih peran terlebih dahulu.'); return; }
+    if (!username || !password) {
+      alert('Username dan password wajib diisi.');
       return;
     }
 
-    simpanSesi({
-      rol: 'pendidik',
-      peran: akun.peran,
-      nama: akun.nama || akun.username,
-      username: akun.username,
-    });
-    bukaDashboard();
+    const btn = $('#btn-masuk-dashboard');
+    if (btn) btn.disabled = true;
+
+    const guru = await cariGuru(peran, username, password);
+
+    if (btn) btn.disabled = false;
+
+    // EROR: akun tidak ditemukan / tidak cocok
+    if (!guru) {
+      alert('Login gagal: peran / username / password tidak cocok. Periksa kembali!');
+      return;
+    }
+
+    // Simpan sesi pendidik ke sessionStorage
+    SESI.set('role', 'GURU');
+    SESI.set('peran', guru.peran || peran);
+    SESI.set('username', guru.username || username);
+    SESI.set('nama_guru', guru.nama || guru.nama_guru || guru.username || username);
+    if (guru.kelas_id) SESI.set('kelas_id', guru.kelas_id);   // opsional (wali kelas)
+
+    renderDashboard();
   });
 }
 
 /* ============================================================
-   DASHBOARD : buka layar, sapaan, & siapkan tab
+   RENDER DASHBOARD — role-based routing
+   ------------------------------------------------------------
+   - Koordinator : sembunyikan 3 tab, tampilkan Panel Koordinator
+   - Murid / Tim Kelas : tampilkan 3 tab + sapaan dinamis
    ============================================================ */
-function bukaDashboard() {
-  const s = sesiAktif;
-  if (!s) return;
+function renderDashboard() {
+  const role  = (SESI.get('role') || '').toUpperCase();
+  const peran = (SESI.get('peran') || '').toLowerCase();
 
-  $('#screen-gatekeeper').classList.add('hidden');
-  $('#screen-dashboard').classList.remove('hidden');
+  // 1) Sembunyikan layar login, tampilkan dashboard
+  const gate = $('#screen-gatekeeper');
+  const dash = $('#screen-dashboard');
+  if (gate) gate.classList.add('hidden');
+  if (dash) dash.classList.remove('hidden');
 
-  // Sapaan dinamis di header
-  const welcome = $('#welcome-text');
-  if (s.rol === 'murid') {
-    welcome.textContent = `Halo, ${s.nama} - ${s.kelasNama}`;
+  const isKoordinator = role === 'KOORDINATOR' || peran === 'koordinator';
+
+  // 2) Atur navigasi & panel sesuai peran
+  const tabNav      = $('.tab-nav');
+  const panelKoord  = $('#panel-koordinator');
+  const kontenTab   = $$('.tab-content');
+
+  if (isKoordinator) {
+    if (tabNav) tabNav.classList.add('hidden');
+    if (panelKoord) panelKoord.classList.remove('hidden');
+    kontenTab.forEach((c) => c.classList.remove('active'));
   } else {
-    welcome.textContent = `Halo, ${s.nama} (${labelPeran(s.peran)})`;
+    if (tabNav) tabNav.classList.remove('hidden');
+    if (panelKoord) panelKoord.classList.add('hidden');
+    pilihTab('tab-quran');   // tampilkan tab pertama (Al-Qur'an)
   }
 
-  // Buka tab pertama secara default
-  pilihTab('tab-quran');
+  // 3) Sapaan dinamis di header
+  const welcome = $('#welcome-text');
+  if (welcome) {
+    if (role === 'MURID') {
+      const nama      = SESI.get('nama_murid') || 'Murid';
+      const kelasNama = SESI.get('nama_kelas') || '';
+      welcome.textContent = kelasNama
+        ? 'Halo, ' + nama + ' - ' + kelasNama
+        : 'Halo, ' + nama;
+    } else {
+      const nama = SESI.get('nama_guru') || SESI.get('username') || 'Pendidik';
+      welcome.textContent = 'Halo, ' + nama + ' - ' + labelPeran(peran);
+    }
+  }
 
-  toast(s.rol === 'murid'
-    ? `${s.nama}, selamat belajar! 🌟`
-    : `Selamat bekerja, ${s.nama}! ✨`, 'fa-star');
+  toast(role === 'MURID'
+    ? 'Selamat datang, ' + (SESI.get('nama_murid') || '') + '! 🌟'
+    : 'Selamat bekerja! ✨', 'fa-star');
 }
 
 /* ============================================================
@@ -421,18 +419,21 @@ const btnLogout = $('#btn-logout');
 if (btnLogout) {
   btnLogout.addEventListener('click', () => {
     if (!confirm('Yakin ingin keluar?')) return;
-    hapusSesi();
+
+    SESI.clear();
+    sesiSementaraKelas = null;
+
     $('#screen-dashboard').classList.add('hidden');
     $('#screen-gatekeeper').classList.remove('hidden');
 
-    // Kembalikan form murid ke kondisi awal
+    // Reset form murid
     $('#panel-pilih-murid').classList.add('hidden');
     const pesan = $('#pesan-murid');
     if (pesan) { pesan.textContent = ''; pesan.className = 'form-status hidden'; }
     $('#sandi-kelas').value = '';
     $('#select-murid').selectedIndex = 0;
 
-    // Kembalikan form pendidik
+    // Reset form pendidik
     $('#peran-pendidik').selectedIndex = 0;
     $('#username-pendidik').value = '';
     $('#password-pendidik').value = '';
@@ -446,22 +447,23 @@ if (btnLogout) {
    ============================================================ */
 function cekSession() {
   try {
-    const raw = localStorage.getItem(SESI_KEY);
-    if (!raw) return;
-    const s = JSON.parse(raw);
+    const role = (SESI.get('role') || '').toUpperCase();
+    const peran = SESI.get('peran');
+    const namaMurid = SESI.get('nama_murid');
+    const namaGuru  = SESI.get('nama_guru');
 
-    if (s && s.rol === 'murid' && s.nama && s.kelasNama) {
-      sesiAktif = { rol: 'murid', nama: s.nama, kelas: { kode: s.kelasKode, nama: s.kelasNama } };
-      bukaDashboard();
+    if (!role) return;
+
+    if (role === 'MURID' && namaMurid && SESI.get('kelas_id')) {
+      renderDashboard();
       return;
     }
-    if (s && s.rol === 'pendidik' && s.peran && s.nama) {
-      sesiAktif = s;
-      bukaDashboard();
+    if (role === 'GURU' && peran && (namaGuru || SESI.get('username'))) {
+      renderDashboard();
       return;
     }
   } catch (err) {
-    hapusSesi();
+    SESI.clear();
   }
 }
 

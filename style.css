@@ -385,6 +385,9 @@ input, select, textarea { font-family: inherit; }
 .tab-content-head h2 { font-size: 1.35rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
 .tab-content-head p { margin-top: 6px; }
 
+/* Panel khusus Koordinator */
+.koordinator-panel { margin-top: 22px; }
+
 /* ═══════════════════════════════════════════════════════════
    TOAST
    ═══════════════════════════════════════════════════════════ */
