@@ -253,6 +253,18 @@ input, select, textarea { font-family: inherit; }
 .form-status.ok  { color: #059669; }
 .form-status.err { color: #dc2626; }
 
+/* ---------- Petunjuk akun demo ---------- */
+.demo-hint {
+  margin-top: 14px; padding: 10px 14px;
+  font-size: .8rem; font-weight: 600; line-height: 1.6;
+  color: #475569; text-align: center;
+  background: rgb(148 163 184 / .12);
+  border: 1px dashed rgb(100 116 139 / .35);
+  border-radius: 12px;
+}
+.demo-hint i { color: #f59e0b; margin-right: 4px; }
+.demo-hint b { color: #0f766e; font-weight: 700; }
+
 /* ---------- Tombol gradien + efek membesar & bersinar ---------- */
 .btn {
   position: relative;

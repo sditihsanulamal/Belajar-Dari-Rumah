@@ -1,27 +1,20 @@
 /* ============================================================
    RUANG KELAS ONLINE — script.js
-   SPA sederhana (show/hide section) + data dummy
+   UI BARU : Gatekeeper (toggle Murid/Pendidik) + Dashboard Tab
+   ------------------------------------------------------------
+   Alur login:
+   - Murid    : Cek Sandi Kelas -> pilih nama -> Masuk Kelas
+   - Pendidik : peran + username + password -> Masuk Dashboard
+   Data memakai SUPABASE (tabel relasional: master_kelas,
+   master_murid, master_pendidik) bila tersedia, dan otomatis
+   FALLBACK ke data demo lokal agar aplikasi selalu bisa dipakai.
    ============================================================ */
 
-/* ---------- Konfigurasi Cloudinary (Fase 4) ----------
-   Unsigned Upload: cukup URL upload + preset, tanpa API key di frontend. */
-const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/woeufsww/upload';
-const UPLOAD_PRESET   = 'bdr_sdit';
+/* ---------- Konfigurasi Supabase (lazy & non-blocking) ---------- */
+const SUPABASE_URL = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
+let db = null;   // client `db` (dipakai lazy oleh inisialisasiDb)
 
-/* ---------- Konfigurasi & Inisialisasi Supabase ----------
-   Client memakai nama `db` (bukan `supabase`) agar TIDAK bentrok
-   dengan global `supabase` dari CDN. Inisialisasi dilakukan TRYGGT
-   & LAZY (non-blocking):
-   - Jika window.supabase sudah ada -> langsung buat client-nya.
-   - Jika belum -> CDN dimuat dinamis (fallback jsDelivr -> unpkg).
-   PENTING: tidak pernah melempar error saat load, jadi seluruh
-   aplikasi (login murid/guru, navigasi) tetap berfungsi walau
-   database belum tersedia. */
-const supabaseUrl = 'https://pqbxrrtsgrbyyrdpeglt.supabase.co';
-const supabaseKey = 'sb_publishable_ODg9vaJgA-lOWT7DU7V1Sg_sILIvypM';
-let db = null;   // client `db`, diisi lazy oleh inisialiseraDb()
-
-// Memuat skrip eksternal via Promise (non-blocking)
 function muatScript(src) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('script');
@@ -32,9 +25,8 @@ function muatScript(src) {
   });
 }
 
-// Membuat client `db` bila memungkinkan (memuat CDN kalau perlu).
-// TIDAK PERNAH melempar error agar halaman tidak ikut mati.
-async function inisialiseraDb() {
+// TIDAK PERNAH melempar error supaya aplikasi tetap jalan.
+async function inisialisasiDb() {
   try {
     if (typeof window.supabase === 'undefined') {
       try {
@@ -44,100 +36,238 @@ async function inisialiseraDb() {
       }
     }
     if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
-      db = window.supabase.createClient(supabaseUrl, supabaseKey);
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       console.log('✅ Supabase terhubung.');
     }
   } catch (err) {
-    console.warn('⚠ Gagal inisialisera Supabase:', err);
+    console.warn('⚠ Gagal inisialisasi Supabase:', err);
   }
 }
 
-// Menunggu client `db` siap (lazy init). WAJIB di-await di tiap operasi DB.
-// Kalau Supabase tidak tersedia -> return false (aplikasi tetap jalan).
-async function tungguSupabase(ms = 8000) {
+async function tungguSupabase(ms = 6000) {
   if (db) return true;
-  await Promise.race([inisialiseraDb(), new Promise((r) => setTimeout(r, ms))]);
+  await Promise.race([inisialisasiDb(), new Promise((r) => setTimeout(r, ms))]);
   return !!db;
 }
 
-/* ---------- Helper singkat ---------- */
+/* ---------- Helper ---------- */
 const $  = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-/* ---------- DATA DUMMY (tanpa database asli) ---------- */
-
-// Daftar nama murid (digunakan untuk dropdown login murid)
-const daftarNamaMurid = ['Ahmad', 'Budi', 'Siti', 'Zahra'];
-
-// Data murid lengkap (dipakai tabel nilai, galeri, checklist, dll.)
-const daftarMurid = daftarNamaMurid.map((nama) => ({ nama, kelas: 'Kelas 4A' }));
-
-// Checklist harian murid
-const checklistItems = [
-  { icon: 'fa-mosque',              label: 'Shalat Subuh berjamaah' },
-  { icon: 'fa-book-quran',          label: "Muroja'ah Al-Qur'an 1 halaman" },
-  { icon: 'fa-book-open',           label: 'Membaca buku/materi 20 menit' },
-  { icon: 'fa-pen',                 label: 'Mengerjakan tugas dari guru' },
-  { icon: 'fa-hand-holding-heart',  label: 'Membantu pekerjaan rumah' },
-    { icon: 'fa-dumbbell',            label: 'Olahraga / menggerakkan badan' },
-    { icon: 'fa-sun',                 label: 'Sholat Dhuha berjamaah' },
-    { icon: 'fa-hand-sparkles',       label: 'Life Skill: keterampilan harian' },
-    { icon: 'fa-moon',                label: 'Istirahat & tidur yang cukup' },
-  ];
-
-// Catatan: galeri foto tugas kini dibaca dari tabel "tugas_murid" di Supabase,
-// lihat fungsi renderGaleriTugas() di bagian Wali Kelas.
-
-// Checklist harian versi wali kelas (rekap siswa)
-const checklistWali = [
-  { nama: 'Ahmad', shalat: true,  murojaah: true,  tugas: true },
-  { nama: 'Budi',  shalat: false, murojaah: true,  tugas: true },
-  { nama: 'Siti',  shalat: true,  murojaah: true,  tugas: true },
-  { nama: 'Zahra', shalat: true,  murojaah: false, tugas: false },
-];
-
-// Akun guru demo (validasi hardcode sederhana)
-const AKUN_GURU = { email: 'guru@sekolah.com', password: '123' };
-
-/* ---------- State aplikasi ---------- */
-let muridAktif = null;          // nama murid yang sedang login (string)
-
-// Catatan Fase 5: data tugas & nilai TIDAK lagi disimpan di localStorage.
-// Semua baca/tulis kini lewat Supabase (tabel tugas_murid & nilai_quran).
-
-/* ============================================================
-   NAVIGASI SPA (show / hide section)
-   ============================================================ */
-const OFFSET_HEADER_PAGES = ['landing-page', 'login-murid', 'login-guru'];
-
-function showPage(id) {
-  $$('.page').forEach((page) => {
-    page.classList.toggle('hidden', page.id !== id);
-  });
-
-  // Header hanya tampil saat sudah "masuk"
-  $('#app-header').classList.toggle('hidden', OFFSET_HEADER_PAGES.includes(id));
-
-  // Fase 5: render ulang data dari Supabase saat dashboard tertentu dibuka
-    if (id === 'dashboard-walikelas') renderGaleriTugas();   // baca tugas_murid
-    if (id === 'dashboard-quran')     renderTabelNilai();    // baca nilai_quran
-
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+function toast(msg, icon = 'fa-circle-check') {
+  const area = $('#toast-area');
+  if (!area) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<i class="fa-solid ${icon}"></i> ${msg}`;
+  area.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 350);
+  }, 2600);
 }
 
-/* Delegasi: semua elemen dengan atribut data-go berpindah halaman */
-document.addEventListener('click', (e) => {
-  const trigger = e.target.closest('[data-go]');
-  if (trigger) showPage(trigger.dataset.go);
-});
+// Tampilkan pesan status pada elemen form (tipe: ok | err)
+function tampilkanStatus(el, teks, tipe) {
+  if (!el) return;
+  el.textContent = teks;
+  el.className = 'form-status ' + (tipe || '');
+}
 
 /* ============================================================
-   HALAMAN 2A -> LOGIN MURID (dropdown nama, tanpa password)
+   DATA DEMO / FALLBACK
+   (dipakai kalau database belum terisi atau tidak bisa diakses)
    ============================================================ */
-function isiDropdownMurid() {
+const KELAS_DEMO = [
+  { kode: 'kelas-1a', nama: 'Kelas 1A', sandi: 'kelas-1a' },
+  { kode: 'kelas-4a', nama: 'Kelas 4A', sandi: 'kelas-4a' },
+];
+
+const MURID_DEMO = {
+  'kelas-1a': ['Ahmad', 'Budi', 'Siti', 'Zahra'],
+  'kelas-4a': ['Dewi', 'Fajar', 'Hana', 'Raka'],
+};
+
+// Peran & akun pendidik demo. PENTING: semua password = 123
+const PERAN_PENDIDIK = [
+  { peran: 'walikelas',   label: 'Wali Kelas' },
+  { peran: 'guru-mapel',  label: 'Guru Mapel' },
+  { peran: 'guru-quran',  label: "Guru Qur'an" },
+  { peran: 'koordinator', label: 'Koordinator' },
+];
+
+const PENDIDIK_DEMO = [
+  { peran: 'walikelas',   username: 'walikelas',   password: '123', nama: 'Pak Budi' },
+  { peran: 'guru-mapel',  username: 'gurumapel',   password: '123', nama: 'Bu Siti' },
+  { peran: 'guru-quran',  username: 'guruquran',   password: '123', nama: 'Ust. Ahmad' },
+  { peran: 'koordinator', username: 'koordinator', password: '123', nama: 'Pak Hasan' },
+];
+
+function labelPeran(peran) {
+  const p = PERAN_PENDIDIK.find((x) => x.peran === peran);
+  return p ? p.label : peran;
+}
+
+/* ============================================================
+   STATE APLIKASI & SESI
+   ============================================================ */
+let sesiAktif = null;   // { rol: 'murid'|'pendidik', ... }
+
+const SESI_KEY = 'rukob_session';
+
+function simpanSesi(rincian) {
+  localStorage.setItem(SESI_KEY, JSON.stringify(rincian));
+  sesiAktif = rincian;
+}
+
+function hapusSesi() {
+  localStorage.removeItem(SESI_KEY);
+  sesiAktif = null;
+}
+
+/* ============================================================
+   TOGGLE LOGIN : Murid <-> Pendidik
+   ============================================================ */
+const loginToggle = $('#login-toggle');
+const panelMurid  = $('#panel-murid');
+const panelPendidik = $('#panel-pendidik');
+
+if (loginToggle) {
+  loginToggle.addEventListener('click', (e) => {
+    const opt = e.target.closest('.toggle-option');
+    if (!opt || opt.classList.contains('active')) return;
+
+    // Ganti status aktif tombol + aria
+    loginToggle.querySelectorAll('.toggle-option').forEach((o) => {
+      o.classList.toggle('active', o === opt);
+      o.setAttribute('aria-selected', o === opt ? 'true' : 'false');
+    });
+
+    // Geser indikator & tukar panel (fade-in)
+    const kePendidik = opt.dataset.role === 'pendidik';
+    loginToggle.classList.toggle('pendidik', kePendidik);
+    panelMurid.classList.toggle('active', !kePendidik);
+    panelPendidik.classList.toggle('active', kePendidik);
+
+    // Bersihkan status error lama supaya tidak membingungkan
+    const ps = $('#pesan-murid');
+    if (ps) ps.classList.add('hidden');
+  });
+}
+
+/* ============================================================
+   LANGKAH 1 MURID : CEK SANDI KELAS
+   ============================================================ */
+async function cariKelas(sandi) {
+  const s = String(sandi || '').trim().toLowerCase();
+
+  // 1) Coba database relasional (master_kelas) bila tersedia
+  if (await tungguSupabase()) {
+    try {
+      const { data, error } = await db.from('master_kelas').select('*');
+      if (!error && Array.isArray(data) && data.length) {
+        const ketemu = data.find((k) =>
+          String(k.sandi_kelas || k.sandi || k.kode || '').toLowerCase() === s ||
+          String(k.kode || '').toLowerCase() === s
+        );
+        if (ketemu) {
+          return {
+            kode: ketemu.kode || ketemu.id || s,
+            nama: ketemu.nama || 'Kelas',
+            sandi: s,
+            dariDb: true,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('⚠ master_kelas tidak terbaca, pakai demo:', err);
+    }
+  }
+
+  // 2) Fallback data demo
+  return KELAS_DEMO.find((k) => k.sandi === s || k.kode === s) || null;
+}
+
+const formCekKelas = $('#form-cek-kelas');
+if (formCekKelas) {
+  formCekKelas.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = $('#sandi-kelas');
+    const pesan = $('#pesan-murid');
+    const sandi = (input ? input.value : '').trim();
+
+    if (!sandi) {
+      tampilkanStatus(pesan, 'Ketik sandi kelas dulu ya!', 'err');
+      pesan.classList.remove('hidden');
+      return;
+    }
+
+    const btn = $('#btn-cek-kelas');
+    if (btn) btn.disabled = true;
+
+    const kelas = await cariKelas(sandi);
+
+    if (btn) btn.disabled = false;
+
+    if (!kelas) {
+      tampilkanStatus(pesan, 'Sandi kelas tidak ditemukan. Coba "kelas-1a" ya!', 'err');
+      pesan.classList.remove('hidden');
+      return;
+    }
+
+    // Simpan kelas yang ditemukan utk langkah berikutnya
+    sesiAktif = { rol: 'murid', kelas: kelas };
+
+    // Isi dropdown nama murid untuk kelas tsb
+    await isiDaftarNamaMurid(kelas);
+    $('#select-murid').selectedIndex = 0;
+
+    // Tampilkan panel pilih nama
+    $('#panel-pilih-murid').classList.remove('hidden');
+    tampilkanStatus(pesan, '', 'ok');
+    pesan.classList.add('hidden');
+
+    toast(`Kelas ditemukan: ${kelas.nama} 🎉`, 'fa-circle-check');
+  });
+}
+
+/* ============================================================
+   ISI DROPDOWN NAMA MURID (dari master_murid / demo)
+   ============================================================ */
+async function isiDaftarNamaMurid(kelas) {
   const select = $('#select-murid');
+  if (!select) return;
   select.innerHTML = '<option value="">— Pilih nama kamu —</option>';
-  daftarNamaMurid.forEach((nama) => {
+
+  let daftar = [];
+
+  // Coba database relasional (master_murid) bila tersedia
+  if (await tungguSupabase()) {
+    try {
+      const kolomKelas = ['kelas_id', 'kelas_kode', 'kode_kelas', 'nama_kelas_id'];
+      const { data, error } = await db.from('master_murid').select('*');
+      if (!error && Array.isArray(data) && data.length) {
+        daftar = data
+          .filter((m) => {
+            const val = kolomKelas.map((k) => String(m[k] || '')).join('|');
+            return val.toLowerCase().includes(kelas.kode.toLowerCase()) ||
+                   String(m.kelas || '').toLowerCase() === kelas.nama.toLowerCase();
+          })
+          .map((m) => m.nama || m.nama_murid || '');
+        daftar = daftar.filter(Boolean);
+      }
+    } catch (err) {
+      console.warn('⚠ master_murid tidak terbaca, pakai demo:', err);
+    }
+  }
+
+  // Fallback demo
+  if (!daftar.length) {
+    daftar = MURID_DEMO[kelas.kode] || MURID_DEMO[kelas.sandi] || [];
+  }
+
+  daftar.forEach((nama) => {
     const opt = document.createElement('option');
     opt.value = nama;
     opt.textContent = nama;
@@ -145,926 +275,199 @@ function isiDropdownMurid() {
   });
 }
 
-function masukSebagaiMurid(nama) {
-  // Simpan sesi ke localStorage (contoh: { role: 'student', name: 'Budi' })
-  localStorage.setItem('session', JSON.stringify({ role: 'student', name: nama }));
-  muridAktif = nama;
+/* ============================================================
+   LANGKAH 2 MURID : MASUK KELAS
+   ============================================================ */
+const btnMasukKelas = $('#btn-masuk-kelas');
+if (btnMasukKelas) {
+  btnMasukKelas.addEventListener('click', () => {
+    const nama = $('#select-murid').value;
+    const pesan = $('#pesan-murid');
 
-  // Sapaan di dashboard murid
-  $('#sapaan-murid').textContent = `Selamat datang, ${nama}! 👋`;
-  $('#murid-nama').textContent = nama;
-  $('#murid-kelas').textContent = 'Kelas 4A — SDN Harapan 01';
-  const avatar = $('#murid-avatar');
-  avatar.innerHTML = `<span style="font-size:.95rem;font-weight:800">${nama[0].toUpperCase()}</span>`;
-  $('#tanggal-today').textContent = '📅 ' + new Date().toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    if (!nama) {
+      tampilkanStatus(pesan, 'Pilih namamu dulu ya!', 'err');
+      pesan.classList.remove('hidden');
+      return;
+    }
+
+    if (!(sesiAktif && sesiAktif.kelas)) {
+      tampilkanStatus(pesan, 'Silakan cek sandi kelas dulu.', 'err');
+      pesan.classList.remove('hidden');
+      return;
+    }
+
+    // Simpan sesi & buka dashboard
+    const kelas = sesiAktif.kelas;
+    simpanSesi({ rol: 'murid', nama, kelasKode: kelas.kode, kelasNama: kelas.nama });
+    bukaDashboard();
   });
-
-  renderChecklistMurid();
-  showPage('dashboard-murid');
-  toast(`Halo, ${nama}! Selamat belajar 🌟`);
 }
-
-// Submit form login murid
-$('#form-login-murid').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const nama = $('#select-murid').value;
-  if (!nama) {
-    toast('Pilih nama kamu dulu ya!', 'fa-triangle-exclamation');
-    return;
-  }
-  masukSebagaiMurid(nama);
-});
-
-// Landing: tombol pilih peran
-$('#btn-role-murid').addEventListener('click', () => showPage('login-murid'));
-$('#btn-role-guru').addEventListener('click', () => showPage('login-guru'));
 
 /* ============================================================
-   DASHBOARD MURID — CHECKLIST HARIAN
+   LOGIN PENDIDIK
    ============================================================ */
-function renderChecklistMurid() {
-  const ul = $('#checklist-murid');
-  ul.innerHTML = '';
+async function cariPendidik(peran, username, password) {
+  const u = String(username || '').trim().toLowerCase();
+  const p = String(password || '');
 
-  checklistItems.forEach((item, idx) => {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <span class="check-box"><i class="fa-solid fa-check"></i></span>
-      <span class="label"><i class="fa-solid ${item.icon}"></i>${item.label}</span>
-    `;
-    li.addEventListener('click', () => {
-      li.classList.toggle('done');
-      updateProgress();
-    });
-    ul.appendChild(li);
-  });
-
-  updateProgress();
-}
-
-function updateProgress() {
-  const total = $$('#checklist-murid li').length;
-  const done  = $$('#checklist-murid li.done').length;
-  const persen = Math.round((done / total) * 100);
-
-  $('#check-progress-text').textContent = `${done}/${total}`;
-  $('#check-progress-bar').style.width = persen + '%';
-
-  if (done === total) {
-    toast('Alhamdulillah, checklist hari ini lengkap! 🎉', 'fa-star');
-  }
-}
-
-/* ---------- Upload tugas (simulasi) ---------- */
-$('#btn-upload-murid').addEventListener('click', () => $('#file-tugas').click());
-
-$('#file-tugas').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    toast(`Tugas "${file.name}" berhasil diupload! 📤`, 'fa-cloud-arrow-up');
-    e.target.value = '';
-  }
-});
-
-/* ============================================================
-   FASE 5 (BARU): UPLOAD BUKTI KEGIATAN -> CLOUDINARY + SUPABASE
-   - Cloudinary : menyimpan file gambar & mengembalikan URL
-                  terkompresi (q_auto,f_auto).
-   - Supabase   : menyimpan metadata { nama_murid, jenis_kegiatan,
-                  foto_url } ke tabel "tugas_murid".
-   ============================================================ */
-// Label tampilan untuk masing-masing jenis kegiatan
-const LABEL_KEGIATAN = {
-  'sholat-dhuha': 'Sholat Dhuha',
-  'life-skill':   'Life Skill',
-};
-
-// Delegasi: tombol "Upload Foto" -> memicu input file tersembunyi
-$('#dashboard-murid').addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-upload-foto');
-  if (!btn) return;
-  const key = btn.dataset.kegiatan;
-  const input = document.querySelector(`.file-foto[data-kegiatan="${CSS.escape(key)}"]`);
-  if (input) input.click();
-});
-
-// Sisipkan /upload/q_auto,f_auto/ agar Cloudinary mengompres foto otomatis.
-// Contoh: .../upload/v1234/foto.jpg -> .../upload/q_auto,f_auto/v1234/foto.jpg
-function optimasiCloudinaryUrl(url) {
-  return url.replace('/upload/', '/upload/q_auto,f_auto/');
-}
-
-// Delegasi: setelah murid memilih foto -> unggah ke Cloudinary, lalu simpan ke Supabase
-$('#dashboard-murid').addEventListener('change', async (e) => {
-  const input = e.target.closest('.file-foto');
-  if (!input) return;
-
-  const file = input.files[0];
-  if (!file) return;
-
-  const key = input.dataset.kegiatan;
-  const btn    = $(`.btn-upload-foto[data-kegiatan="${CSS.escape(key)}"]`);
-  const prev   = $(`#preview-${key}`);
-  const status = $(`#status-${key}`);
-  const teksAsliTombol = (btn && btn.innerHTML) || '';
-
-  // --- Indikator loading: ubah teks tombol & nonaktifkan (cegah klik 2x) ---
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sedang Mengunggah...';
-  }
-  if (status) status.textContent = '⏳ Mengunggah ke Cloudinary...';
-
-  try {
-    // ===== A) Upload gambar ke Cloudinary (async) =====
-    let fotoUrlAkhir = '';
+  // 1) Coba database relasional (master_pendidik) bila tersedia
+  if (await tungguSupabase()) {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', UPLOAD_PRESET);
-
-      const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-      if (!res.ok) throw new Error(`Upload gagal (HTTP ${res.status})`);
-
-      const data = await res.json();
-      if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
-
-      // Optimasi otomatis: kompres foto lewat q_auto,f_auto
-      fotoUrlAkhir = optimasiCloudinaryUrl(data.secure_url);
+      const { data, error } = await db.from('master_pendidik').select('*');
+      if (!error && Array.isArray(data) && data.length) {
+        const ketemu = data.find((x) =>
+          String(x.peran || '').toLowerCase() === peran &&
+          String(x.username || '').toLowerCase() === u &&
+          String(x.password || '') === p
+        );
+        if (ketemu) {
+          return {
+            peran,
+            username: ketemu.username || u,
+            nama: ketemu.nama || ketemu.nama_pendidik || u,
+          };
+        }
+      }
     } catch (err) {
-      // Gagal upload ke Cloudinary (mis. koneksi putus)
-      console.error('Cloudinary upload error:', err);
-      if (status) status.textContent = '⚠ Gagal mengunggah';
-      toast('Gagal mengunggah gambar. Periksa koneksi Anda.', 'fa-triangle-exclamation');
+      console.warn('⚠ master_pendidik tidak terbaca, pakai demo:', err);
+    }
+  }
+
+  // 2) Fallback data demo
+  const akun = PENDIDIK_DEMO.find(
+    (x) => x.peran === peran && x.username.toLowerCase() === u && x.password === p
+  );
+  return akun || null;
+}
+
+const formLoginPendidik = $('#form-login-pendidik');
+if (formLoginPendidik) {
+  formLoginPendidik.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const peran    = $('#peran-pendidik').value;
+    const username = $('#username-pendidik').value.trim();
+    const password = $('#password-pendidik').value;
+    const btn      = $('#btn-masuk-dashboard');
+
+    if (!peran)  { toast('Pilih peranmu dulu ya!', 'fa-triangle-exclamation'); return; }
+    if (!username || !password) { toast('Username & password wajib diisi!', 'fa-triangle-exclamation'); return; }
+
+    if (btn) btn.disabled = true;
+    const akun = await cariPendidik(peran, username, password);
+    if (btn) btn.disabled = false;
+
+    if (!akun) {
+      toast('Peran / username / password salah. Coba akun demo di bawah!', 'fa-triangle-exclamation');
       return;
     }
 
-    // ===== B) Simpan metadata tugas ke Supabase (tabel tugas_murid) =====
-        if (!(await tungguSupabase())) {
-          if (status) status.textContent = '⚠ Database tidak aktif';
-          return;
-        }
-        if (status) status.textContent = '⏳ Menyimpan ke database...';
-        try {
-                  const { error: dbError } = await db
-                .from('tugas_murid')
-        .insert({
-          nama_murid: muridAktif || 'Murid',
-          jenis_kegiatan: LABEL_KEGIATAN[key] || key,
-          foto_url: fotoUrlAkhir,
-        });
-      if (dbError) throw dbError;
-    } catch (err) {
-      console.error('Supabase insert error:', err);
-      if (status) status.textContent = '⚠ Gagal menyimpan';
-      alert('Gagal menyimpan tugas ke database. Periksa koneksi Anda.');
-      return;
-    }
-
-    // ===== C) Sukses: tampilkan pratinjau & notifikasi =====
-    if (prev) {
-      prev.src = fotoUrlAkhir;
-      prev.classList.remove('hidden');
-    }
-    if (status) status.textContent = '✓ Berhasil diserahkan!';
-    toast('Tugas Berhasil Terkirim! 📸', 'fa-circle-check');
-  } finally {
-    // Kembalikan tombol & input ke kondisi semula (sukses maupun gagal)
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = teksAsliTombol;
-    }
-    input.value = '';   // reset agar file yang sama bisa dipilih lagi
-      }
+    simpanSesi({
+      rol: 'pendidik',
+      peran: akun.peran,
+      nama: akun.nama || akun.username,
+      username: akun.username,
     });
-
-    /* ============================================================
-       FASE 6 (BARU): WIDGET KUALITAS UDARA (AQI)
-       - Mengambil data AQI dari Open-Meteo Air Quality API
-         (gratis, tanpa API key), koordinat default: Banjarmasin.
-       - Jika API tidak bisa diakses, gunakan data cadangan statis (120).
-       - Jika AQI > 100 widget berubah oranye/merah + pesan peringatan.
-       ============================================================ */
-    async function fetchAQI() {
-          const aqiCard  = $('#aqi-card');
-          if (!aqiCard) return;
-
-          const elValue  = $('#aqi-value');
-          const elStatus = $('#aqi-status');
-          const elFill   = $('#aqi-fill');
-          const elLokasi = $('#aqi-lokasi');
-
-          try {
-            // ===== A) Panggil Open-Meteo Air Quality API sungguhan (tanpa API key) =====
-            const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=-3.27&longitude=114.60&current=us_aqi';
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-
-            const data = await res.json();
-
-            // Nilai AQI ada di dalam objek current.us_aqi
-            const aqi = (data && data.current && typeof data.current.us_aqi === 'number')
-              ? Math.round(data.current.us_aqi)
-              : null;
-
-            if (aqi === null || isNaN(aqi)) {
-              throw new Error('Nilai current.us_aqi tidak ditemukan di respons API');
-            }
-
-            // ===== B) Pengkondisian level AQI (standar AQI) + warna latar widget =====
-            let pesan   = '';
-            let warnaBg = '';        // warna latar belakang widget
-            let kelasK  = '';        // kelas warna bawaan CSS (border + teks)
-
-            if (aqi <= 50) {
-              // Hijau
-              pesan   = 'Udara segar. Aman untuk beraktivitas.';
-              warnaBg = '#e3f7f1';
-              kelasK  = 'aqi-baik';
-            } else if (aqi <= 100) {
-              // Kuning
-              pesan   = 'Kualitas udara sedang. Jaga kesehatan.';
-              warnaBg = '#fff7e6';
-              kelasK  = 'aqi-sedang';
-            } else if (aqi <= 150) {
-              // Oranye
-              pesan   = 'Udara kurang sehat untuk kelompok sensitif. Kurangi aktivitas luar.';
-              warnaBg = '#fff8f0';
-              kelasK  = 'aqi-kurang';
-            } else {
-              // Merah
-              pesan   = 'Awas Kabut Asap! Udara tidak sehat, tetap di rumah dan pakai masker!';
-              warnaBg = '#fdeaea';
-              kelasK  = 'aqi-buruk';
-            }
-
-            // ===== C) Perbarui elemen HTML widget =====
-            // Hapus kelas warna lama, terapkan yang baru, lalu warnai latar belakang widget
-            aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
-            aqiCard.classList.add(kelasK);
-            aqiCard.style.backgroundColor = warnaBg;
-
-            if (elValue)  elValue.textContent  = aqi;
-            if (elStatus) elStatus.textContent = 'AQI ' + aqi + ' • ' + pesan;
-            if (elFill)   elFill.style.width   = Math.min(100, (aqi / 300) * 100) + '%';
-            if (elLokasi) elLokasi.textContent = 'Banjarmasin, Kalimantan • Open-Meteo';
-          } catch (err) {
-            // ===== D) Fallback bila API gagal dipanggil =====
-            console.warn('⚠ Gagal mengambil AQI dari Open-Meteo:', err);
-            aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
-            aqiCard.style.backgroundColor = '';
-
-            if (elValue)  elValue.textContent  = '—';
-            if (elStatus) elStatus.textContent = 'Data AQI tidak tersedia saat ini.';
-            if (elFill)   elFill.style.width   = '0%';
-          }
-        }
-
-    function tampilkanAQI(aqi, sumber) {
-      const aqiCard  = $('#aqi-card');
-      const elValue  = $('#aqi-value');
-      const elStatus = $('#aqi-status');
-      const elFill   = $('#aqi-fill');
-      const elLokasi = $('#aqi-lokasi');
-      if (!aqiCard) return;
-
-      let level = 'Baik';
-      let pesan = 'Udara bersih. Ayo beraktivitas di luar!';
-      let kelas = 'aqi-baik';
-
-      if (aqi <= 50) {
-        level = 'Baik';
-        pesan = 'Udara bersih. Ayo beraktivitas di luar!';
-        kelas = 'aqi-baik';
-      } else if (aqi <= 100) {
-        level = 'Sedang';
-        pesan = 'Udara sedang. Tetap jaga kesehatan ya!';
-        kelas = 'aqi-sedang';
-      } else if (aqi <= 200) {
-        level = 'Kurang Sehat';
-        pesan = 'Udara sedang kurang sehat. Tetap di dalam rumah dan perbanyak minum air putih ya!';
-        kelas = 'aqi-kurang';
-      } else {
-        level = 'Sangat Tidak Sehat';
-        pesan = 'Udara sedang kurang sehat. Tetap di dalam rumah dan perbanyak minum air putih ya!';
-        kelas = 'aqi-buruk';
-      }
-
-      // Ganti kelas warna widget
-      aqiCard.classList.remove('aqi-baik', 'aqi-sedang', 'aqi-kurang', 'aqi-buruk');
-      aqiCard.classList.add(kelas);
-
-      if (elValue)  elValue.textContent  = aqi;
-      if (elLokasi) elLokasi.textContent = 'Banjarmasin, Kalimantan • ' + sumber;
-      if (elStatus) elStatus.textContent = level + ' (AQI ' + aqi + '). ' + pesan;
-      if (elFill)   elFill.style.width   = Math.min(100, (aqi / 300) * 100) + '%';
-    }
-
-    /* ============================================================
-       FASE 6 (BARU): SETORAN HAFALAN MANDIRI (PERekAM SUARA)
-       - Alur: getUserMedia -> MediaRecorder -> Blob -> File (.webm/.mp4)
-               -> Cloudinary (video/upload) -> Supabase (tugas_murid),
-         dengan jenis_kegiatan "Setoran Hafalan".
-       ============================================================ */
-    // Cloudinary memperlakukan audio sebagai video, jadi gunakan endpoint
-    // video/upload secara eksplisit (bukan auto/upload) agar audio diterima.
-    const CLOUDINARY_URL_AUDIO = 'https://api.cloudinary.com/v1_1/woeufsww/video/upload';
-
-    let recorderStream  = null;   // MediaStream dari mikrofon
-    let mediaRecorder   = null;   // MediaRecorder aktif
-    let recChunks       = [];     // potongan data rekaman
-    let recTimerId      = null;   // id interval timer
-    let recDetik        = 0;      // durasi rekaman (detik)
-
-    function formatDurasi(detik) {
-      const m = String(Math.floor(detik / 60)).padStart(2, '0');
-      const s = String(detik % 60).padStart(2, '0');
-      return m + ':' + s;
-    }
-
-    async function mulaiRekam() {
-      const btnMulai = $('#btn-mulai-rekam');
-      const btnStop  = $('#btn-berhenti-rekam');
-      const status   = $('#rec-status');
-
-      // Cek dukungan browser terlebih dahulu
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-        alert('Browser kamu tidak mendukung perekaman suara (MediaRecorder). Gunakan Chrome/Edge/Firefox terbaru.');
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        recorderStream = stream;
-        mediaRecorder = new MediaRecorder(stream);
-        recChunks = [];
-
-        mediaRecorder.addEventListener('dataavailable', (e) => {
-          if (e.data && e.data.size > 0) recChunks.push(e.data);
-        });
-        // Saat rekaman berhenti -> kirim hasilnya
-        mediaRecorder.addEventListener('stop', kirimRekaman);
-
-        mediaRecorder.start();
-
-        // UI mode merekam
-        btnMulai.classList.add('hidden');
-        btnStop.classList.remove('hidden');
-        recDetik = 0;
-        $('#rec-timer').textContent = formatDurasi(0);
-        recTimerId = setInterval(() => {
-          recDetik += 1;
-          $('#rec-timer').textContent = formatDurasi(recDetik);
-        }, 1000);
-        if (status) status.textContent = '🔴 Merekam... Klik "Berhenti Rekam" saat selesai.';
-        $('#rec-preview-wrap').classList.add('hidden');
-        toast('Perekaman dimulai 🎙️', 'fa-microphone');
-      } catch (err) {
-        console.error('Gagal akses mikrofon:', err);
-        alert('Tidak bisa mengakses mikrofon. Izinkan akses mikrofon di browser, lalu coba lagi.');
-      }
-    }
-
-    // Dipanggil otomatis saat MediaRecorder berhenti (event 'stop')
-        async function kirimRekaman() {
-          const btnMulai = $('#btn-mulai-rekam');
-          const btnStop  = $('#btn-berhenti-rekam');
-          const status   = $('#rec-status');
-
-          clearInterval(recTimerId);
-
-          // Matikan lampu/izin mikrofon
-          if (recorderStream) {
-            recorderStream.getTracks().forEach((t) => t.stop());
-            recorderStream = null;
-          }
-
-          // Tidak ada data -> batalkan
-          if (recChunks.length === 0) {
-            if (status) status.textContent = 'Rekaman kosong. Coba rekam lagi.';
-            setelTombolRekamSelesai();
-            return;
-          }
-
-          const mime = mediaRecorder ? mediaRecorder.mimeType : '';
-          const blob = new Blob(recChunks, { type: mime || 'audio/webm' });
-
-          // Tentukan ekstensi sesuai tipe konten (Chrome: webm, Safari: mp4)
-          let ekstensi = 'webm';
-          if (/mp4/i.test(mime)) ekstensi = 'mp4';
-          else if (/ogg/i.test(mime)) ekstensi = 'ogg';
-
-          const file = new File([blob], 'setoran-' + Date.now() + '.' + ekstensi, { type: blob.type || 'audio/webm' });
-
-          if (status) status.textContent = '⏳ Mengunggah rekaman ke Cloudinary...';
-          if (btnMulai) btnMulai.disabled = true;
-          if (btnStop)  btnStop.disabled  = true;
-
-          // ===== A) Upload audio ke Cloudinary =====
-          let audioUrl = '';
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('upload_preset', UPLOAD_PRESET);
-            formData.append('resource_type', 'video');   // audio diperlakukan sebagai video
-
-            const res = await fetch(CLOUDINARY_URL_AUDIO, { method: 'POST', body: formData });
-            if (!res.ok) throw new Error('Upload audio gagal (HTTP ' + res.status + ')');
-
-            const data = await res.json();
-            if (!data.secure_url) throw new Error('secure_url tidak ditemukan');
-
-            audioUrl = data.secure_url;
-          } catch (error) {
-            console.error('Detail Error:', error);        // log detail untuk debugging
-            if (status) status.textContent = '⚠ Gagal mengunggah audio ke server.';
-            alert('Gagal mengunggah audio ke server.');
-            setelTombolRekamSelesai();
-            return;
-          }
-
-          // ===== B) Simpan metadata ke Supabase =====
-                          // Pastikan client db benar-benar tersedia sebelum memanggil insert()
-                          if (!(await tungguSupabase())) {
-                            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
-                            alert('Audio terunggah, tapi gagal menyimpan ke database.');
-                            setelTombolRekamSelesai();
-                            return;
-                          }
-
-                if (status) status.textContent = '⏳ Menyimpan ke database...';
-                try {
-                  const { error: dbError } = await db
-                    .from('tugas_murid')
-              .insert({
-                nama_murid: muridAktif || 'Murid',
-                jenis_kegiatan: 'Setoran Hafalan',
-                foto_url: audioUrl,
-              });
-            if (dbError) throw dbError;
-
-            // ===== C) Sukses: pratinjau + notifikasi =====
-            const preview = $('#rec-preview-audio');
-            if (preview) preview.src = audioUrl;
-            $('#rec-preview-wrap').classList.remove('hidden');
-            if (status) status.textContent = '✓ Setoran hafalan berhasil dikirim!';
-            alert('Alhamdulillah, setoran hafalan berhasil dikirim! 🎉');
-            toast('Setoran Hafalan Terkirim! ✅', 'fa-circle-check');
-          } catch (error) {
-            console.error('Detail Error:', error);        // log detail untuk debugging
-            if (status) status.textContent = '⚠ Audio terunggah, tapi gagal menyimpan ke database.';
-            alert('Audio terunggah, tapi gagal menyimpan ke database.');
-          } finally {
-            setelTombolRekamSelesai();
-          }
-        }
-
-    // Kembalikan tombol ke kondisi awal
-    function setelTombolRekamSelesai() {
-      const btnMulai = $('#btn-mulai-rekam');
-      const btnStop  = $('#btn-berhenti-rekam');
-      if (btnMulai) { btnMulai.disabled = false; btnMulai.classList.remove('hidden'); }
-      if (btnStop)  { btnStop.disabled  = false; btnStop.classList.add('hidden'); }
-      mediaRecorder = null;
-      recChunks = [];
-    }
-
-    // Event tombol rekam
-    $('#btn-mulai-rekam').addEventListener('click', mulaiRekam);
-    $('#btn-berhenti-rekam').addEventListener('click', () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        const status = $('#rec-status');
-        if (status) status.textContent = '⏳ Mengirim rekaman...';
-        mediaRecorder.stop();     // memicu event 'stop' -> kirimRekaman()
-      }
-    });
-
-    // Keamanan: matikan mikrofon bila halaman ditutup/ditinggalkan
-    window.addEventListener('pagehide', () => {
-      clearInterval(recTimerId);
-      if (recorderStream) {
-        recorderStream.getTracks().forEach((t) => t.stop());
-        recorderStream = null;
-      }
-      mediaRecorder = null;
-    });
-
-    /* ============================================================
-       HALAMAN 2 -> LOGIN GURU (password)
-       ============================================================ */
-$('#toggle-pass').addEventListener('click', () => {
-  const input = $('#password');
-  const isHidden = input.type === 'password';
-  input.type = isHidden ? 'text' : 'password';
-  $('#toggle-pass i').className = isHidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
-});
-
-$('#form-login-guru').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const email    = $('#email').value.trim().toLowerCase();
-  const password = $('#password').value;
-
-  if (email === AKUN_GURU.email && password === AKUN_GURU.password) {
-      // Simpan sesi guru ke localStorage (contoh: { role: 'teacher' })
-      localStorage.setItem('session', JSON.stringify({ role: 'teacher' }));
-      $('#login-error').classList.add('hidden');
-      $('#email').value = '';
-      $('#password').value = '';
-      showPage('dashboard-guru');
-      toast('Selamat datang, Guru! 👋');
-    } else {
-      $('#login-error').classList.remove('hidden');
-    }
+    bukaDashboard();
   });
+}
 
 /* ============================================================
-   HALAMAN 5 -> BUKU NILAI GURU AL-QUR'AN (FASE 5: BARU)
-   Tabel dirender dinamis; nilai yang tersimpan ditarik dari
-   tabel "nilai_quran" di Supabase, lalu disimpan kembali
-   lewat insert/delete.
+   DASHBOARD : buka layar, sapaan, & siapkan tab
    ============================================================ */
-async function renderTabelNilai() {
-  const wrap = $('#wrap-tabel-nilai');
-  if (!wrap) return;
+function bukaDashboard() {
+  const s = sesiAktif;
+  if (!s) return;
 
-  // Indikator pemuatan sebelum data dari server tiba
-    wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-spinner fa-spin"></i> Memuat buku nilai...</p>';
+  $('#screen-gatekeeper').classList.add('hidden');
+  $('#screen-dashboard').classList.remove('hidden');
 
-    // Database tidak tersedia -> tampilkan pesan, jangan lanjut
-    if (!(await tungguSupabase())) {
-      wrap.innerHTML = '<p class="muted" style="text-align:center;padding:1.4rem"><i class="fa-solid fa-triangle-exclamation"></i> Database tidak tersedia.</p>';
-      return;
-    }
-
-    // Ambil nilai yang sudah tersimpan (untuk mengisi ulang dropdown/input)
-  let nilaiMap = {};
-  try {
-    const { data, error } = await db.from('nilai_quran').select('*');
-    if (error) throw error;
-    (data || []).forEach((r) => { nilaiMap[r.nama_murid] = r; });
-  } catch (err) {
-    console.error('Gagal mengambil nilai:', err);
-    alert('Gagal mengambil data nilai dari server.');
+  // Sapaan dinamis di header
+  const welcome = $('#welcome-text');
+  if (s.rol === 'murid') {
+    welcome.textContent = `Halo, ${s.nama} - ${s.kelasNama}`;
+  } else {
+    welcome.textContent = `Halo, ${s.nama} (${labelPeran(s.peran)})`;
   }
 
-  let rows = '';
-  daftarMurid.forEach((m, i) => {
-    const inisial = (m.nama[0] || '?').toUpperCase();
-    const nilai = nilaiMap[m.nama] || {};
+  // Buka tab pertama secara default
+  pilihTab('tab-quran');
 
-    // Opsi dropdown Muraja'ah: bintang 1-5
-    const opsiBintang = [1, 2, 3, 4, 5]
-      .map((b) => `<option value="${b}" ${String(nilai.nilai_murajaah) === String(b) ? 'selected' : ''}>${'★'.repeat(b)}</option>`)
-      .join('');
-
-    rows += `
-      <tr>
-        <td>${i + 1}</td>
-        <td>
-          <div class="cell-nama">
-            <span class="mini-avatar">${inisial}</span>${m.nama}
-          </div>
-        </td>
-        <td>
-          <select class="form-select select-murajaah" data-nama="${m.nama}" data-kolom="murajaah">
-            <option value="">—</option>
-            ${opsiBintang}
-          </select>
-        </td>
-        <td>
-          <select class="form-select select-hafalan" data-nama="${m.nama}" data-kolom="hafalan">
-            <option value="">—</option>
-            <option value="Lulus" ${nilai.status_hafalan === 'Lulus' ? 'selected' : ''}>Lulus</option>
-            <option value="Mengulang" ${nilai.status_hafalan === 'Mengulang' ? 'selected' : ''}>Mengulang</option>
-          </select>
-        </td>
-        <td>
-          <input type="text" class="form-input input-wafa" data-nama="${m.nama}" data-kolom="wafa"
-                 placeholder="Hal. 14" value="${nilai.catatan_wafa || ''}">
-        </td>
-        <td>
-          <button class="btn btn-small btn-primary btn-simpan-nilai" data-nama="${m.nama}">
-            <i class="fa-solid fa-floppy-disk"></i> Simpan Nilai
-          </button>
-        </td>
-      </tr>`;
-  });
-
-  wrap.innerHTML = `
-    <table id="tabel-nilai">
-      <thead>
-        <tr>
-          <th>No</th>
-          <th>Nama Murid</th>
-          <th>Muraja'ah</th>
-          <th>Hafalan</th>
-          <th>Wafa</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+  toast(s.rol === 'murid'
+    ? `${s.nama}, selamat belajar! 🌟`
+    : `Selamat bekerja, ${s.nama}! ✨`, 'fa-star');
 }
-
-// Baca nilai satu baris dari input yang sedang tampil di layar
-function ambilNilaiRow(nama) {
-  const elM     = $(`.select-murajaah[data-nama="${CSS.escape(nama)}"]`);
-  const elH     = $(`.select-hafalan[data-nama="${CSS.escape(nama)}"]`);
-  const elW     = $(`.input-wafa[data-nama="${CSS.escape(nama)}"]`);
-
-  return {
-    murajaah: elM ? Number(elM.value) : 0,
-    hafalan:  elH ? elH.value : '',
-    wafa:     elW ? elW.value.trim() : '',
-  };
-}
-
-// Efek visual: baris & tombol berubah hijau sesaat setelah tersimpan
-function tandaiRowTersimpan(nama) {
-  const btn = $(`.btn-simpan-nilai[data-nama="${CSS.escape(nama)}"]`);
-  const tr  = btn ? btn.closest('tr') : null;
-  if (!tr) return;
-  tr.classList.add('saved-row');
-  btn.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan';
-  btn.classList.add('btn-success');
-  btn.classList.remove('btn-primary');
-  setTimeout(() => {
-    tr.classList.remove('saved-row');
-    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Nilai';
-    btn.classList.remove('btn-success');
-    btn.classList.add('btn-primary');
-  }, 1600);
-}
-
-// FASE 5 (BARU): simpan nilai per murid -> insert ke tabel nilai_quran.
-// (delegasi lewat #wrap-tabel-nilai karena tbody dirender dinamis)
-// Catatan: jika kolom nama_murid di tabel ber-constraint UNIQUE, ganti
-// .insert() dengan .upsert(..., { onConflict: 'nama_murid' }) agar tidak dobel.
-$('#wrap-tabel-nilai').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.btn-simpan-nilai');
-  if (!btn) return;
-
-  const nama = btn.dataset.nama;
-    const nilai = ambilNilaiRow(nama);
-
-    if (!(await tungguSupabase())) return;  // jangan disable tombol jika DB tidak aktif
-
-    // Indikator loading pada tombol
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
-
-  try {
-    const { error } = await db.from('nilai_quran').insert({
-      nama_murid: nama,
-      nilai_murajaah: nilai.murajaah || null,
-      status_hafalan: nilai.hafalan || '',
-      catatan_wafa: nilai.wafa,
-    });
-    if (error) throw error;
-
-    tandaiRowTersimpan(nama);
-    toast(`Nilai ${nama} berhasil disimpan! ✅`);
-  } catch (err) {
-    console.error('Gagal simpan nilai:', err);
-    alert('Gagal menyimpan nilai. Periksa koneksi Anda.');
-    // Kembalikan tombol seperti semula (tandaiRowTersimpan tidak sempat jalan)
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Nilai';
-  }
-});
-
-// Simpan semua sekaligus -> insert per baris ke nilai_quran
-$('#btn-simpan-semua').addEventListener('click', async () => {
-  if (!(await tungguSupabase())) return;  // jangan disable tombol jika DB tidak aktif
-
-  const btn = $('#btn-simpan-semua');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
-
-  try {
-    for (const m of daftarMurid) {
-      const n = ambilNilaiRow(m.nama);
-      if (!n.murajaah && !n.hafalan && !n.wafa) continue;
-
-      const { error } = await db.from('nilai_quran').insert({
-        nama_murid: m.nama,
-        nilai_murajaah: n.murajaah || null,
-        status_hafalan: n.hafalan || '',
-        catatan_wafa: n.wafa,
-      });
-      if (error) throw error;
-    }
-    toast('Semua nilai berhasil disimpan! 💾');
-  } catch (err) {
-    console.error('Gagal simpan semua nilai:', err);
-    alert('Gagal menyimpan nilai. Periksa koneksi Anda.');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Semua';
-  }
-});
-
-// Reset: hapus semua baris nilai_quran di Supabase
-$('#btn-reset-nilai').addEventListener('click', async () => {
-  if (!confirm('Yakin ingin menghapus semua nilai?')) return;
-  if (!(await tungguSupabase())) return;
-
-  try {
-    const { error } = await db.from('nilai_quran').delete();
-    if (error) throw error;
-    renderTabelNilai();
-    toast('Nilai di-reset ke awal.', 'fa-rotate-left');
-  } catch (err) {
-    console.error('Gagal reset nilai:', err);
-    alert('Gagal menghapus nilai. Periksa koneksi Anda.');
-  }
-});
 
 /* ============================================================
-   HALAMAN 6 -> WALI KELAS (Galeri Tugas dari Supabase)
+   NAVIGASI TAB (Al-Qur'an / Mata Pelajaran / Harian)
    ============================================================ */
-// FASE 5 (BARU): galeri menarik data dari tabel "tugas_murid" di Supabase.
-async function renderGaleriTugas() {
-  const grid = $('#gallery-grid');
-  if (!grid) return;
-
-  // Indikator pemuatan sebelum data dari server tiba
-    grid.innerHTML = `
-      <div class="empty-state">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-        <p>Memuat galeri tugas...</p>
-      </div>`;
-
-    // Database tidak tersedia -> tampilkan pesan, jangan teruskan
-    if (!(await tungguSupabase())) {
-      grid.innerHTML = `
-        <div class="empty-state">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <p>Database tidak tersedia. Galeri belum dapat dimuat.</p>
-        </div>`;
-      return;
-    }
-
-    try {
-    // Tarik data galeri langsung dari Supabase (bukan localStorage)
-    const { data, error } = await db.from('tugas_murid').select('*');
-    if (error) throw error;
-
-    grid.innerHTML = '';
-
-    // Tidak ada data -> pesan kosong
-    if (!data || data.length === 0) {
-      grid.innerHTML = `
-        <div class="empty-state">
-          <i class="fa-regular fa-folder-open"></i>
-          <p>Belum ada bukti kegiatan yang diserahkan murid.</p>
-          <span class="muted">Coba login sebagai murid lalu upload foto.</span>
-        </div>`;
-      return;
-    }
-
-    data.forEach((t) => {
-      const card = document.createElement('div');
-      card.className = 'gallery-card';
-
-      const url = t.foto_url || '';
-      // FASE 6: jika URL berakhiran .webm/.mp4/.mp3 -> render pemutar audio
-      const adalahAudio = /\.(webm|mp4|mp3)(?:[?#]|$)/i.test(url);
-
-      const mediaHtml = adalahAudio
-        ? `
-          <div class="photo photo-audio">
-            <audio controls preload="none" src="${url}"></audio>
-          </div>`
-        : `
-          <div class="photo">
-            <span class="photo-icon"><i class="fa-solid fa-camera"></i></span>
-            <img src="${url}" alt="Bukti foto ${t.nama_murid}" loading="lazy" onerror="this.remove()">
-            <span class="status-pill">Diserahkan</span>
-          </div>`;
-
-      card.innerHTML = `
-        ${mediaHtml}
-        <div class="gallery-body">
-          <div class="g-name">${t.nama_murid || 'Murid'}</div>
-          <div class="g-title"><i class="fa-solid fa-tag"></i> ${t.jenis_kegiatan || 'Kegiatan'}</div>
-        </div>
-      `;
-      grid.appendChild(card);
-    });
-  } catch (err) {
-    console.error('Gagal mengambil data galeri:', err);
-    alert('Gagal mengambil data galeri dari server.');
-    grid.innerHTML = `
-      <div class="empty-state">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <p>Gagal memuat galeri. Periksa koneksi Anda.</p>
-      </div>`;
-  }
+function pilihTab(id) {
+  $$('.tab-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === id);
+  });
+  $$('.tab-content').forEach((c) => {
+    c.classList.toggle('active', c.id === id);
+  });
 }
 
-// Tab: Galeri <-> Checklist
-$$('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    const target = tab.dataset.tab;
-    $('#panel-gallery').classList.toggle('hidden', target !== 'gallery');
-    $('#panel-checklist').classList.toggle('hidden', target !== 'checklist');
-  });
+$$('.tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => pilihTab(btn.dataset.tab));
 });
-
-// Tabel checklist harian untuk wali kelas
-function renderChecklistWali() {
-  const tbody = $('#tbody-checklist-wali');
-  tbody.innerHTML = '';
-
-  checklistWali.forEach((c) => {
-    const jumlah = [c.shalat, c.murojaah, c.tugas].filter(Boolean).length;
-    const lengkap = jumlah === 3;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><b>${c.nama}</b></td>
-      <td>${c.shalat  ? '<i class="fa-solid fa-circle-check icon-yes"></i>' : '<i class="fa-regular fa-circle icon-no"></i>'}</td>
-      <td>${c.murojaah ? '<i class="fa-solid fa-circle-check icon-yes"></i>' : '<i class="fa-regular fa-circle icon-no"></i>'}</td>
-      <td>${c.tugas    ? '<i class="fa-solid fa-circle-check icon-yes"></i>' : '<i class="fa-regular fa-circle icon-no"></i>'}</td>
-      <td><span class="status-chip ${lengkap ? 'lengkap' : 'kurang'}">${lengkap ? 'Lengkap 🎉' : 'Belum lengkap'}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
 
 /* ============================================================
    LOGOUT
    ============================================================ */
-$('#btn-logout').addEventListener('click', () => {
-  if (!confirm('Yakin ingin keluar?')) return;
-  localStorage.clear();          // hapus sesi dari localStorage
-  muridAktif = null;
-  showPage('landing-page');
-  toast('Kamu sudah keluar. Sampai jumpa! 👋', 'fa-right-from-bracket');
-});
+const btnLogout = $('#btn-logout');
+if (btnLogout) {
+  btnLogout.addEventListener('click', () => {
+    if (!confirm('Yakin ingin keluar?')) return;
+    hapusSesi();
+    $('#screen-dashboard').classList.add('hidden');
+    $('#screen-gatekeeper').classList.remove('hidden');
 
-/* ============================================================
-   TOAST (notifikasi kecil)
-   ============================================================ */
-function toast(msg, icon = 'fa-circle-check') {
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.innerHTML = `<i class="fa-solid ${icon}"></i> ${msg}`;
-  $('#toast-area').appendChild(t);
+    // Kembalikan form murid ke kondisi awal
+    $('#panel-pilih-murid').classList.add('hidden');
+    const pesan = $('#pesan-murid');
+    if (pesan) { pesan.textContent = ''; pesan.className = 'form-status hidden'; }
+    $('#sandi-kelas').value = '';
+    $('#select-murid').selectedIndex = 0;
 
-  requestAnimationFrame(() => t.classList.add('show'));
-  setTimeout(() => {
-    t.classList.remove('show');
-    setTimeout(() => t.remove(), 350);
-  }, 2400);
+    // Kembalikan form pendidik
+    $('#peran-pendidik').selectedIndex = 0;
+    $('#username-pendidik').value = '';
+    $('#password-pendidik').value = '';
+
+    toast('Kamu sudah keluar. Sampai jumpa! 👋', 'fa-right-from-bracket');
+  });
 }
 
 /* ============================================================
-   PENGECEKAN SESI (localStorage) SAAT HALAMAN DIMUAT
+   PENGECEKAN SESI SAAT HALAMAN DIMUAT
    ============================================================ */
 function cekSession() {
-  const raw = localStorage.getItem('session');
-
-  // Tidak ada sesi -> kembali ke landing page
-  if (!raw) {
-    showPage('landing-page');
-    return;
-  }
-
   try {
-    const sesi = JSON.parse(raw);
+    const raw = localStorage.getItem(SESI_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
 
-    // Role student -> langsung tampilkan dashboard murid
-    if (sesi.role === 'student' && sesi.name) {
-      masukSebagaiMurid(sesi.name);
+    if (s && s.rol === 'murid' && s.nama && s.kelasNama) {
+      sesiAktif = { rol: 'murid', nama: s.nama, kelas: { kode: s.kelasKode, nama: s.kelasNama } };
+      bukaDashboard();
       return;
     }
-
-    // Role teacher -> langsung tampilkan dashboard guru (pilih modul)
-    if (sesi.role === 'teacher') {
-      showPage('dashboard-guru');
+    if (s && s.rol === 'pendidik' && s.peran && s.nama) {
+      sesiAktif = s;
+      bukaDashboard();
       return;
     }
   } catch (err) {
-    // Data di localStorage rusak -> bersihkan dan kembali ke landing
+    hapusSesi();
   }
-
-  localStorage.clear();
-  showPage('landing-page');
 }
 
 /* ============================================================
    INISIALISASI
    ============================================================ */
-function init() {
-  isiDropdownMurid();
-  fetchAQI();             // FASE 6: widget kualitas udara (AQI)
-  renderTabelNilai();     // ambil nilai_quran dari Supabase
-  renderGaleriTugas();    // ambil tugas_murid dari Supabase
-  renderChecklistWali();
-  cekSession();           // periksa sesi login di localStorage
-}
-
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  cekSession();
+});
