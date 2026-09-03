@@ -121,16 +121,16 @@ const KELAS_DEMO = [
 
 const MURID_DEMO = {
   'kelas-1a': [
-    { murid_id: 'm1', nama: 'Ahmad' },
-    { murid_id: 'm2', nama: 'Budi' },
-    { murid_id: 'm3', nama: 'Siti' },
-    { murid_id: 'm4', nama: 'Zahra' },
+    { murid_id: '00000000-0000-0000-0000-000000000001', nama: 'Ahmad' },
+    { murid_id: '00000000-0000-0000-0000-000000000002', nama: 'Budi' },
+    { murid_id: '00000000-0000-0000-0000-000000000003', nama: 'Siti' },
+    { murid_id: '00000000-0000-0000-0000-000000000004', nama: 'Zahra' },
   ],
   'kelas-4a': [
-    { murid_id: 'm5', nama: 'Dewi' },
-    { murid_id: 'm6', nama: 'Fajar' },
-    { murid_id: 'm7', nama: 'Hana' },
-    { murid_id: 'm8', nama: 'Raka' },
+    { murid_id: '00000000-0000-0000-0000-000000000005', nama: 'Dewi' },
+    { murid_id: '00000000-0000-0000-0000-000000000006', nama: 'Fajar' },
+    { murid_id: '00000000-0000-0000-0000-000000000007', nama: 'Hana' },
+    { murid_id: '00000000-0000-0000-0000-000000000008', nama: 'Raka' },
   ],
 };
 
