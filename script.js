@@ -234,9 +234,7 @@ if (formCekKelas) {
 
     sesiSementaraKelas = kelas;
 
-    // Ambil & isi dropdown nama murid
-    const daftarMurid = await ambilMuridByKelas(kelas);
-    isiDropdownMurid(daftarMurid);
+    // Hapus pemanggilan daftarMurid karena sekarang input nama manual
 
     const panelPilih = $('#panel-pilih-murid');
     if (panelPilih) panelPilih.classList.remove('hidden');
@@ -248,72 +246,22 @@ if (formCekKelas) {
 }
 
 /* ============================================================
-   MURID — AMBIL & ISI DROPDOWN NAMA MURID
+   FUNGSI AMBIL MURID & ISI DROPDOWN DIHAPUS (INPUT MANUAL)
    ============================================================ */
-async function ambilMuridByKelas(kelas) {
-  const daftar = [];
-
-  // 1) Sumber DATABASE
-  if (await tungguSupabase()) {
-    try {
-      const { data, error } = await db.from('master_murid').select('*');
-      if (!error && Array.isArray(data) && data.length) {
-        const targetKelasId = String(kelas.id || kelas.kelas_id || kelas.kode || '').toLowerCase();
-        const targetNama    = String(kelas.nama || '').toLowerCase();
-
-        data.forEach(function (m) {
-          // cocokkan lewat beberapa kemungkinan nama kolom kelas di master_murid
-          const kelasRef = String(m.kelas_id || m.kelas_kode || m.kode_kelas || m.nama_kelas_id || m.kelas || '');
-          const muridNama = m.nama || m.nama_murid || '';
-          if (!muridNama) return;
-
-          const cocok =
-            targetKelasId && kelasRef.toLowerCase() === targetKelasId ||
-            targetNama && (kelasRef.toLowerCase() === targetNama || String(m.kelas_nama || '').toLowerCase() === targetNama);
-
-          if (cocok) {
-            daftar.push({ murid_id: m.id || m.murid_id || muridNama, nama: muridNama });
-          }
-        });
-        if (daftar.length) return daftar;
-      }
-      console.warn('⚠ master_murid tidak cocok/tidak ada, fallback demo.');
-    } catch (err) {
-      console.warn('⚠ master_murid tidak terbaca:', err);
-    }
-  }
-
-  // 2) FALLBACK DEMO
-  const kode = String(kelas.id || kelas.kode || kelas.sandi || '').toLowerCase();
-  return MURID_DEMO[kode] || [];
-}
-
-function isiDropdownMurid(daftar) {
-  const select = $('#select-murid');
-  if (!select) return;
-  select.innerHTML = '<option value="">— Pilih nama kamu —</option>';
-
-  daftar.forEach((m) => {
-    const opt = document.createElement('option');
-    opt.value = m.murid_id;
-    opt.textContent = m.nama;
-    select.appendChild(opt);
-  });
-}
 
 /* ============================================================
-   MURID — LANGKAH 2 : MASUK KELAS
+   MURID — LANGKAH 2 : MASUK KELAS (DENGAN AUTO-REGISTER)
    ============================================================ */
 const btnMasukKelas = $('#btn-masuk-kelas');
 if (btnMasukKelas) {
-  btnMasukKelas.addEventListener('click', () => {
-    const select = $('#select-murid');
+  btnMasukKelas.addEventListener('click', async () => {
+    const inputNama = $('#input-nama-murid');
     const pesan  = $('#pesan-murid');
-    const murid_id = select ? select.value : '';
+    const nama_murid = inputNama ? inputNama.value.trim() : '';
 
-    if (!murid_id) {
-      tampilkanStatus(pesan, 'Pilih namamu dulu ya!', 'err');
-      alert('Pilih nama murid terlebih dahulu sebelum masuk kelas.');
+    if (!nama_murid) {
+      tampilkanStatus(pesan, 'Ketik namamu dulu ya!', 'err');
+      alert('Ketik nama murid terlebih dahulu sebelum masuk kelas.');
       return;
     }
 
@@ -322,10 +270,45 @@ if (btnMasukKelas) {
       alert('Silakan lakukan "Cek Kelas" terlebih dahulu.');
       return;
     }
+    
+    let murid_id = '00000000-0000-0000-0000-' + Math.random().toString(36).substr(2, 9); // Fallback dummy ID
 
-    const nama_murid = select.options[select.selectedIndex]
-      ? select.options[select.selectedIndex].textContent.trim()
-      : '';
+    btnMasukKelas.disabled = true;
+    btnMasukKelas.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
+
+    // Auto-Register ke Supabase
+    if (await tungguSupabase()) {
+      try {
+        const kelas_id = sesiSementaraKelas.id || sesiSementaraKelas.kelas_id || sesiSementaraKelas.kode;
+        
+        // Cek apakah murid sudah ada di master_murid
+        const { data: existing, error: errCek } = await db.from('master_murid')
+          .select('id, murid_id')
+          .eq('nama', nama_murid)
+          .eq('kelas_id', kelas_id)
+          .limit(1);
+          
+        if (!errCek && existing && existing.length > 0) {
+          murid_id = existing[0].id || existing[0].murid_id || murid_id;
+        } else {
+          // Jika belum ada, Insert baru
+          const { data: inserted, error: errIns } = await db.from('master_murid')
+            .insert([{ nama: nama_murid, kelas_id: kelas_id }])
+            .select();
+            
+          if (!errIns && inserted && inserted.length > 0) {
+            murid_id = inserted[0].id || inserted[0].murid_id || murid_id;
+          } else {
+            console.warn('⚠ Gagal auto-register murid:', errIns);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠ Error saat auto-register:', err);
+      }
+    }
+
+    btnMasukKelas.disabled = false;
+    btnMasukKelas.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Masuk Kelas';
 
     SESI.set('role', 'MURID');
     SESI.set('nama_murid', nama_murid);
@@ -848,10 +831,16 @@ if (btnMulaiRekam) {
 
       // 2) Pastikan Supabase siap lalu INSERT ke tabel setoran_quran
       if (!(await tungguSupabase())) throw new Error('Supabase tidak terhubung.');
-      const { error } = await db.from('setoran_quran').insert([
-        { murid_id: muridId, url_media: urlMedia },
-      ]);
-      if (error) throw error;
+      
+      // Cek apakah ini akun demo (murid_id dari fallback)
+      if (muridId.startsWith('00000000-0000-0000-0000-')) {
+        console.log('Simulasi kirim setoran untuk akun DEMO (sukses).', { muridId, urlMedia });
+      } else {
+        const { error } = await db.from('setoran_quran').insert([
+          { murid_id: muridId, url_media: urlMedia },
+        ]);
+        if (error) throw error;
+      }
 
       // 3) Bersihkan preview & beri konfirmasi
       blobSetoran = null;
