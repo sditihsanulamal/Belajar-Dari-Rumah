@@ -323,8 +323,8 @@ if (btnMasukKelas) {
 /* ============================================================
    PENDIDIK — LOGIN TIM KELAS & KOORDINATOR
    ============================================================ */
-async function cariGuru(peran, username, password) {
-  const u = String(username || '').trim().toLowerCase();
+async function cariGuru(peran, nama, password) {
+  const n = String(nama || '').trim().toLowerCase();
   const p = String(password || '');
 
   // 1) Sumber DATABASE (toleran nama kolom)
@@ -334,9 +334,10 @@ async function cariGuru(peran, username, password) {
       if (!error && Array.isArray(data) && data.length) {
         const ketemu = data.find(function (g) {
           const peranCocok = String(g.peran || '').toLowerCase() === String(peran || '').toLowerCase();
-          const userCocok  = String(g.username || g.user || '').toLowerCase() === u;
+          // Cocokkan via kolom nama atau username
+          const namaCocok  = String(g.nama || g.nama_guru || g.username || '').toLowerCase() === n;
           const passCocok  = String(g.password || g.pass || '') === p;
-          return peranCocok && userCocok && passCocok;
+          return peranCocok && namaCocok && passCocok;
         });
         if (ketemu) return ketemu;
       }
@@ -346,10 +347,10 @@ async function cariGuru(peran, username, password) {
     }
   }
 
-  // 2) FALLBACK DEMO (selalu jalan)
+  // 2) FALLBACK DEMO (cocokkan via nama atau username)
   return GURU_DEMO.find(function (g) {
     return String(g.peran || '').toLowerCase() === String(peran || '').toLowerCase() &&
-           String(g.username || '').toLowerCase() === u &&
+           (String(g.nama || '').toLowerCase() === n || String(g.username || '').toLowerCase() === n) &&
            String(g.password || '') === p;
   }) || null;
 }
@@ -361,13 +362,13 @@ if (formLoginPendidik) {
 
     const sandiKelasGuru = ($('#sandi-kelas-guru') ? $('#sandi-kelas-guru').value : '').trim();
     const peran    = $('#peran-pendidik').value;
-    const username = $('#username-pendidik').value.trim();
+    const namaGuru = ($('#username-pendidik') ? $('#username-pendidik').value : '').trim();
     const password = $('#password-pendidik').value;
 
     if (!sandiKelasGuru) { alert('Silakan masukkan Sandi Kelas terlebih dahulu.'); return; }
     if (!peran)   { alert('Silakan pilih peran terlebih dahulu.'); return; }
-    if (!username || !password) {
-      alert('Username dan password wajib diisi.');
+    if (!namaGuru || !password) {
+      alert('Nama dan password wajib diisi.');
       return;
     }
 
@@ -382,20 +383,19 @@ if (formLoginPendidik) {
       return;
     }
 
-    const guru = await cariGuru(peran, username, password);
+    const guru = await cariGuru(peran, namaGuru, password);
 
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Masuk Dashboard'; }
 
     if (!guru) {
-      alert('Login gagal: peran / username / password tidak cocok.');
+      alert('Login gagal: peran / nama / password tidak cocok.');
       return;
     }
 
     SESI.set('role', 'GURU');
     SESI.set('peran', guru.peran || peran);
-    SESI.set('username', guru.username || guru.user || username);
-    SESI.set('nama_guru', guru.nama || guru.nama_guru || guru.username || username);
-    // Kelas dari input sandi (prioritas) > kelas dari database guru
+    SESI.set('username', guru.username || guru.user || namaGuru);
+    SESI.set('nama_guru', guru.nama || guru.nama_guru || namaGuru);
     const resolvedKelasId = kelasGuru.id || kelasGuru.kelas_id || kelasGuru.kode;
     SESI.set('kelas_id', resolvedKelasId);
     SESI.set('nama_kelas', kelasGuru.nama || sandiKelasGuru);
@@ -429,7 +429,16 @@ function renderDashboard() {
   } else {
     if (tabNav) tabNav.classList.remove('hidden');
     if (panelKoord) panelKoord.classList.add('hidden');
-    pilihTab('tab-quran');
+    // Pilih tab default sesuai peran guru
+    if (peran === 'guru-quran') {
+      pilihTab('tab-quran');
+    } else if (peran === 'guru-mapel') {
+      pilihTab('tab-mapel');
+    } else if (peran === 'walikelas') {
+      pilihTab('tab-harian');
+    } else {
+      pilihTab('tab-quran'); // murid & default
+    }
   }
 
   // KERANGKA KHUSUS GURU QUR'AN — tampil hanya utk peran Guru Qur'an
@@ -629,25 +638,21 @@ async function renderDasborGuruQuran() {
   const kelasId = SESI.get('kelas_id');
 
   // Ambil data setoran difilter berdasarkan kelas_id guru
+  // Strategi: tarik setoran + data murid, lalu filter manual di client
   let data = [];
   try {
-    let query = db.from('setoran_quran').select('*, master_murid!inner(nama, kelas_id)');
-    if (kelasId) {
-      // Filter hanya murid dari kelas guru ini
-      query = query.eq('master_murid.kelas_id', kelasId);
-    }
-    const { data: baris, error } = await query;
+    // Coba dulu join untuk dapat nama murid
+    const { data: baris, error } = await db
+      .from('setoran_quran')
+      .select('*, master_murid(id, nama, kelas_id)');
+
     if (!error && Array.isArray(baris)) {
-      data = baris;
+      // Filter di sisi klien berdasarkan kelas_id
+      data = kelasId
+        ? baris.filter(s => s.master_murid && s.master_murid.kelas_id === kelasId)
+        : baris;
     } else {
-      // Fallback: tarik semua setoran tanpa filter join (jika ada isu)
-      console.warn('⚠ Query filter kelas gagal, fallback tanpa filter:', error);
-      const ulang = await db.from('setoran_quran').select('*, master_murid(nama, kelas_id)');
-      if (!ulang.error && Array.isArray(ulang.data)) {
-        data = kelasId
-          ? ulang.data.filter(s => s.master_murid && s.master_murid.kelas_id === kelasId)
-          : ulang.data;
-      }
+      console.warn('⚠ Query setoran gagal:', error);
     }
   } catch (err) {
     console.warn('⚠ setoran_quran tidak terbaca:', err);
